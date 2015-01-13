@@ -1,0 +1,11 @@
+Config:
+  OutputMode: 0
+  OutputFile: PD2Hook.log
+  PrintOffsets: false
+  ExtraCols: 10
+  ExtraRows: 10
+KeyBindings:
+  - [VK_F8, LUA\BetterWeaponStatsMod\IndexStatsToggle.lua]
+  - [VK_F9, LUA\BetterWeaponStatsMod\GreaterPrecisionToggle.lua]
+PostRequireScripts:
+  - [lib/managers/menu/blackmarketgui, LUA\BetterWeaponStatsMod\blackmarketgui.lua]
