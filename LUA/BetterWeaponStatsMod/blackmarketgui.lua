@@ -1225,7 +1225,7 @@ function BlackMarketGui:_setup_weapon_stat_spread(weapon, tweak, name, category,
 	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
 	local base_and_mod = (20 - (base_stats["spread"].value + mods_stats["spread"].value)) / 10
 	local skill_value = skill_stats["spread"].value
-	local global_spread_mul = tweak_data.weapon[name].stats_modifiers and tweak_data.weapon[name].stats_modifiers["spread"] or 1
+	local global_spread_mul = tweak.stats_modifiers and tweak.stats_modifiers["spread"] or 1
 	local spread = tweak.spread
 	
 	local function DR(stance)
@@ -1240,7 +1240,7 @@ function BlackMarketGui:_setup_weapon_stat_spread(weapon, tweak, name, category,
 	
 	table.insert(elements, {label = "Base + Mod Multiplier:", format = "%0.2f", args = {base_and_mod}})
 	if skill_value ~= 0 then table.insert(elements, {label = "Skill Additive Modifier:", format = "%0.2f", args = {skill_value * -1}}) end
-	if tweak.stats_modifiers and tweak.stats_modifiers["spread"] then table.insert(elements, {label = "Innate Spread Multiplier:", format = "%0.2f", args = {global_spread_mul}}) end
+	if global_spread_mul ~= 1 then table.insert(elements, {label = "Innate Spread Multiplier:", format = "%0.2f", args = {global_spread_mul}}) end
 	table.insert(elements, {label = "Stance Spread Multipliers (Total Spread):"})
 	table.insert(elements, {label = "    ADS:", format = "%0.2f (%0.2f)", args = {spread.steelsight, DR(spread.steelsight)}})
 	table.insert(elements, {label = "    ADS-Moving:", format = "%0.2f (%0.2f)", args = {spread.moving_steelsight, DR(spread.moving_steelsight)}})
@@ -1303,12 +1303,22 @@ end
 
 
 function BlackMarketGui:_setup_weapon_stat_suppression(weapon, tweak, name, category, blueprint)
-	local panic_chance = tweak.panic_suppression_chance and tweak.panic_suppression_chance * 100
-	if not panic_chance or name == "gre_m79" then return end
 	local elements = {}
+	local panic_chance = tweak.panic_suppression_chance and tweak.panic_suppression_chance * 100
+	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
+	local base_and_mod = (base_stats["suppression"].value + mods_stats["suppression"].value + 2) / 10
+	local skill = skill_stats["suppression"] / (base_stats["suppression"].value + mods_stats["suppression"].value) + 1
+	local global_suppression_mul = tweak.stats_modifiers and tweak.stats_modifiers["suppression"] or 1
 	
-	table.insert(elements, {label = "Panic Chance (requires Disturbing the Peace):", format = "%d%%", args = {panic_chance}})
-	
+	if panic_chance and name ~= "gre_m79" then
+		table.insert(elements, {label = "Panic Chance (requires Disturbing the Peace):", format = "%d%%", args = {panic_chance}})
+	end
+	table.insert(elements, {label = "Base + Mod Suppression:", format = "%0.2f", args = {base_and_mod}})
+	table.insert(elements, {label = "Skill Multiplier:", format = "%0.2f", args = {skill}})
+	if global_suppression_mul ~= 1 then
+		table.insert(elements, {label = "Innate Suppression Multiplier:", format = "%0.2f", args = {global_suppression_mul}})
+	end
+	table.insert(elements, {label = "Total Maximum Suppression:", format = "%0.2f", args = {base_and_mod * skill * global_suppression_mul}})
 	self:_setup_popup_panel(elements)
 end
 
