@@ -1303,14 +1303,15 @@ end
 
 
 function BlackMarketGui:_setup_weapon_stat_suppression(weapon, tweak, name, category, blueprint)
+	if name == "gre_m79" then return self:_setup_popup_panel() end
 	local elements = {}
 	local panic_chance = tweak.panic_suppression_chance and tweak.panic_suppression_chance * 100
 	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
 	local base_and_mod = (base_stats["suppression"].value + mods_stats["suppression"].value + 2) / 10
-	local skill = skill_stats["suppression"] / (base_stats["suppression"].value + mods_stats["suppression"].value) + 1
+	local skill = managers.blackmarket:threat_multiplier(name, category, false)
 	local global_suppression_mul = tweak.stats_modifiers and tweak.stats_modifiers["suppression"] or 1
 	
-	if panic_chance and name ~= "gre_m79" then
+	if panic_chance then
 		table.insert(elements, {label = "Panic Chance (requires Disturbing the Peace):", format = "%d%%", args = {panic_chance}})
 	end
 	table.insert(elements, {label = "Base + Mod Suppression:", format = "%0.2f", args = {base_and_mod}})
