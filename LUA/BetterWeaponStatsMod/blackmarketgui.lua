@@ -1,5 +1,5 @@
-toggle_greater_precision = true --change false to true to permanently enable
-toggle_index_stats = toggle_index_stats or false --do not permanently enable
+toggle_greater_precision = true --change true to false to make the mod off by default
+toggle_index_stats = false --don't change this
 
 BlackMarketGui.BASE_MARGIN = 10
 BlackMarketGui.ELEMENT_MARGIN = 0
