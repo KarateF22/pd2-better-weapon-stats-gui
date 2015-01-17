@@ -1191,8 +1191,14 @@ end
 function BlackMarketGui:_setup_weapon_stat_damage(weapon, tweak, name, category, blueprint)
 	local elements = {}
 	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
-	local damage = (base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value) * managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
+	local damage_no_hs = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
+	local damage = damage_no_hs * managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
 	local character = tweak_data.character
+	local dozer_outer = math.ceil(150 / (math.ceil(damage_no_hs * 16.384) / 16.384))
+	local dozer_inner = math.ceil(160 / (math.ceil(damage_no_hs * 16.384) / 16.384))
+	local damage_to_remove_faceplates = (dozer_outer + dozer_inner) * damage_no_hs
+	local dozer_ok = math.ceil(512 / math.ceil(512 / ((character["tank"].HEALTH_INIT * 10 - damage_to_remove_faceplates) / (damage * character["tank"].headshot_dmg_mul))))
+	local dozer_dw = math.ceil(512 / math.ceil(512 / ((character["tank"].HEALTH_INIT * 10 * 1.7 - damage_to_remove_faceplates) / (damage * character["tank"].headshot_dmg_mul * .75))))
 	local enemies = {
 		{id = "fbi_swat", name = "FBI Swat (Green)"},
 		--{id = "city_swat", name = "GenSec Elite (Gray)"}, --this is broken
@@ -1200,13 +1206,14 @@ function BlackMarketGui:_setup_weapon_stat_damage(weapon, tweak, name, category,
 		{id = "shield", name = "Shield"},
 		{id = "taser", name = "Taser"},
 		{id = "spooc", name = "Cloaker"},
-		{id = "tank", name = "Bulldozer"},
+		--{id = "tank", name = "Bulldozer"}, --manually overriden for faceplate calcs
 	}
 	
 	table.insert(elements, {label = "Headshots to kill on Overkill:"})
 	for _, data in ipairs(enemies) do
 		table.insert(elements, {label = "    " .. data.name .. ":", format = "%d", args = {math.ceil(512 / math.ceil(512 / (character[data.id].HEALTH_INIT * 10 / (damage * character[data.id].headshot_dmg_mul))))}})
 	end
+	table.insert(elements, {label = "    Bulldozer :", format = "(%d+%d+%d) %d", args = {dozer_outer, dozer_inner, dozer_ok, dozer_outer + dozer_inner + dozer_ok}})
 	table.insert(elements, {label = "Headshots to kill on Death Wish:"})
 	table.insert(elements, {label = "    GenSec Elite (Gray):", format = "%d", args = {math.ceil(512 / math.ceil(512 / (240 / (damage * 1.625))))}})
 	for _, data in ipairs(enemies) do
@@ -1214,7 +1221,7 @@ function BlackMarketGui:_setup_weapon_stat_damage(weapon, tweak, name, category,
 			table.insert(elements, {label = "    " .. data.name .. ":", format = "%d", args = {math.ceil(512 / math.ceil(512 / (character[data.id].HEALTH_INIT * 10 * 1.7 / (damage * character[data.id].headshot_dmg_mul * .75))))}})
 		end
 	end
-	
+	table.insert(elements, {label = "    Bulldozer:", format = "(%d+%d+%d) %d", args = {dozer_outer, dozer_inner, dozer_dw, dozer_outer + dozer_inner + dozer_dw}})
 	self:_setup_popup_panel(elements)
 end
 
@@ -1229,13 +1236,9 @@ function BlackMarketGui:_setup_weapon_stat_spread(weapon, tweak, name, category,
 	local spread = tweak.spread
 	
 	local function DR(stance)
-		if (stance - skill_value) > 1 then
-			return ((stance - skill_value) * global_spread_mul * base_and_mod)
-		elseif (stance - skill_value) == 1 then
-			return (global_spread_mul * base_and_mod)
-		else
-			return (1 / (2 - (stance - skill_value)) * global_spread_mul * base_and_mod)
-		end
+		local stance_and_skill = stance - skill_value
+		if stance_and_skill >= 1 then return (stance_and_skill * global_spread_mul * base_and_mod) end
+		return (1 / (2 - stance_and_skill) * global_spread_mul * base_and_mod)
 	end
 	
 	table.insert(elements, {label = "Base + Mod Multiplier:", format = "%0.2f", args = {base_and_mod}})
@@ -1303,7 +1306,7 @@ end
 
 
 function BlackMarketGui:_setup_weapon_stat_suppression(weapon, tweak, name, category, blueprint)
-	if name == "gre_m79" then return self:_setup_popup_panel() end
+	if name == "gre_m79" then return end
 	local elements = {}
 	local panic_chance = tweak.panic_suppression_chance and tweak.panic_suppression_chance * 100
 	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
@@ -1311,14 +1314,10 @@ function BlackMarketGui:_setup_weapon_stat_suppression(weapon, tweak, name, cate
 	local skill = managers.blackmarket:threat_multiplier(name, category, false)
 	local global_suppression_mul = tweak.stats_modifiers and tweak.stats_modifiers["suppression"] or 1
 	
-	if panic_chance then
-		table.insert(elements, {label = "Panic Chance (requires Disturbing the Peace):", format = "%d%%", args = {panic_chance}})
-	end
+	if panic_chance then table.insert(elements, {label = "Panic Chance (requires Disturbing the Peace):", format = "%d%%", args = {panic_chance}}) end
 	table.insert(elements, {label = "Base + Mod Suppression:", format = "%0.2f", args = {base_and_mod}})
 	table.insert(elements, {label = "Skill Multiplier:", format = "%0.2f", args = {skill}})
-	if global_suppression_mul ~= 1 then
-		table.insert(elements, {label = "Innate Suppression Multiplier:", format = "%0.2f", args = {global_suppression_mul}})
-	end
+	if global_suppression_mul ~= 1 then table.insert(elements, {label = "Innate Suppression Multiplier:", format = "%0.2f", args = {global_suppression_mul}}) end
 	table.insert(elements, {label = "Total Maximum Suppression:", format = "%0.2f", args = {base_and_mod * skill * global_suppression_mul}})
 	self:_setup_popup_panel(elements)
 end
