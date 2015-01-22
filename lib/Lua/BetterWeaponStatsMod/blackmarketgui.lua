@@ -1,9 +1,5 @@
-toggle_greater_precision = true --change true to false to make the mod off by default
-toggle_index_stats = false --don't change this
-
-BlackMarketGui.BASE_MARGIN = 10
-BlackMarketGui.ELEMENT_MARGIN = 0
-BlackMarketGui.FONT_SCALE = 1.0
+toggle_greater_precision = true
+toggle_index_stats = false
 
 local _blackmarketgui_function_ptr1 = BlackMarketGui.mouse_moved
 local _blackmarketgui_function_ptr2 = BlackMarketGui._get_base_stats
@@ -12,6 +8,10 @@ local _blackmarketgui_function_ptr4 = BlackMarketGui._get_mods_stats
 local _blackmarketgui_function_ptr5 = BlackMarketGui.show_stats
 local _blackmarketgui_function_ptr6 = BlackMarketGui._get_stats
 local _blackmarketgui_function_ptr7 = BlackMarketGui._get_weapon_mod_stats
+
+BlackMarketGui.BASE_MARGIN = 10
+BlackMarketGui.ELEMENT_MARGIN = 0
+BlackMarketGui.FONT_SCALE = 1.0
 
 
 

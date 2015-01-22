@@ -1,18 +1,18 @@
 INSTALLATION
 
-Paste contents of entire folder into your top level Payday 2 folder, found in your Steam directory. If you have HoxHud there is no need to overwrite IPHLPAPI.dll, though overwriting it will not harm it either.
+Paste contents of entire folder into your top level Payday 2 folder, found in your Steam directory. It is recommended that you overwrite your IPHLPAPI.dll if present, but make sure you do not remove it if other mods rely on it and you uninstall this mod.
 
 
 
 USE
 
-Once in game press F9 to enable enhanced statistics as well as the pop up boxes giving extra information; it can be toggled on or off at any time through use of that key. F8 allows you to see the index stats of weapon, which is the value that the game uses to actually determine resultant spread, damage, recoil, etc; it does not currently work on the weapon mod screen, however this functionality will be added in a future version.
+By default enhanced statistics are enabled, you can press F9 to toggleenhanced statistics as well as the pop up boxes giving extra information. F8 allows you to see the index stats of weapon, which is the value that the game uses to actually determine resultant spread, damage, recoil, etc; it does not currently work on the weapon mod screen, however this functionality will be added in a future version.
 
 
 
 UNINSTALLING
 
-Remove PD2Hook.yml, and the LUA/BetterWeaponStatsMod folder from your Payday 2 directory. If you have Hox Hud, leave IPHLPAPI.dll, otherwise remove it.
+Remove lib/Lua/BetterWeaponStatsMod.lua and the lib/Lua/BetterWeaponStatsMod folder from your Payday 2 directory. If you have Hox Hud or any other lua mod make sure to leave IPHLPAPI.dll, otherwise it is safe to remove it.
 
 
 
