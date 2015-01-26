@@ -6,13 +6,13 @@ Paste contents of entire folder into your top level Payday 2 folder, found in yo
 
 USE
 
-By default enhanced statistics are enabled, you can press F9 to toggleenhanced statistics as well as the pop up boxes giving extra information. F8 allows you to see the index stats of weapon, which is the value that the game uses to actually determine resultant spread, damage, recoil, etc; it does not currently work on the weapon mod screen, however this functionality will be added in a future version.
+By default enhanced statistics are enabled, you can press F9 to cycle through the three modes: Enhanced Statistics, Index Statistics, and Mod Disabled. Enhanced Statistics is where most of the functionality of the mod can be used, it allows you to see the information in the popups. Index Statistics allows you to see the index stats of weapon, which is the value that the game uses to actually determine resultant spread, damage, recoil, etc. This is additionally useful for seeing hidden Stability modifiers on Weapons that have a base Stability of 20 when looking at what weapon mod to equip. Finally, the third mode simply turns the mod off completely, in case you wish to compare with others who do not have the mod.
 
 
 
 UNINSTALLING
 
-Remove lib/Lua/BetterWeaponStatsMod.lua and the lib/Lua/BetterWeaponStatsMod folder from your Payday 2 directory. If you have Hox Hud or any other lua mod make sure to leave IPHLPAPI.dll, otherwise it is safe to remove it.
+Remove the lib/Lua/BetterWeaponStatsMod.lua file and lib/Lua/BetterWeaponStatsMod folder from your Payday 2 directory. If you have Hox Hud or any other lua mod make sure to leave IPHLPAPI.dll, otherwise it is safe to remove it.
 
 
 

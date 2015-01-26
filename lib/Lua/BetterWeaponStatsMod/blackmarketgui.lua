@@ -332,26 +332,16 @@ function BlackMarketGui:show_stats()
 				local equip = equip_base_stats[stat.name].value + equip_mods_stats[stat.name].value + equip_skill_stats[stat.name].value
 				self._stats_texts[stat.name].equip:set_alpha(0.75)
 				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or toggle_index_stats) and "%0.0f" or "%0.2f"
-				local equip2
-				if toggle_index_stats then
-					equip2 = equip - equip_skill_stats[stat.name].value
-				else
-					equip2 = equip
-				end
+				local equip2 = equip - ((stat.name == "spread" or toggle_index_stats) and equip_skill_stats[stat.name].value or 0)
 				self._stats_texts[stat.name].equip:set_text(string.format(decimals, equip2))
 				self._stats_texts[stat.name].base:set_text("")
 				self._stats_texts[stat.name].mods:set_text("")
 				self._stats_texts[stat.name].skill:set_text("")
-				local value2
-				if toggle_index_stats then
-					value2 = value - skill_stats[stat.name].value
-				else
-					value2 = value
-				end
+				local value2 = value - ((stat.name == "spread" or toggle_index_stats) and skill_stats[stat.name].value or 0)
 				self._stats_texts[stat.name].total:set_text(string.format(decimals, value2))
-				if value > equip then
+				if value2 > equip2 then
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.stats_positive)
-				elseif value < equip then
+				elseif value2 < equip2 then
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.stats_negative)
 				else
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.text)
@@ -750,11 +740,14 @@ end
 
 
 function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats, mods_stats, equipped_mods)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr7(self, mod_name, weapon_name, base_stats, mods_stats, equipped_mods) end
+	if not toggle_greater_precision and not toggle_index_stats then return _blackmarketgui_function_ptr7(self, mod_name, weapon_name, base_stats, mods_stats, equipped_mods) end
 
 	local tweak_stats = tweak_data.weapon.stats
 	local tweak_factory = tweak_data.weapon.factory.parts
 	local modifier_stats = tweak_data.weapon[weapon_name].stats_modifiers
+	local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(weapon_name)
+	local default_blueprint = managers.weapon_factory:get_default_blueprint_by_factory_id(factory_id)
+	local part_data
 	local mod_stats = {}
 	mod_stats.chosen = {}
 	mod_stats.equip = {}
@@ -767,25 +760,26 @@ function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats,
 		for _, mod in ipairs( equipped_mods ) do
 			if tweak_factory[mod] and tweak_factory[mod_name].type == tweak_factory[mod].type then
 				mod_stats.equip.name = mod
-				break
+			else --originally "break"
 			end
 		end
 	end
 	local curr_stats = base_stats
 	local index
 	for _, mod in pairs( mod_stats ) do
+		part_data = mod.name and managers.weapon_factory:get_part_data_by_part_id_from_weapon(mod.name, factory_id, default_blueprint) or nil
 		for _, stat in pairs( self._stats_shown ) do
-			if mod.name then
+			if part_data and part_data.stats then
 				if stat.name == "magazine" then
-					local ammo = tweak_factory[mod.name].stats.extra_ammo
+					local ammo = part_data.stats.extra_ammo
 					ammo = ammo and ammo + (tweak_data.weapon[weapon_name].stats.extra_ammo or 0)
 					mod[stat.name] = ammo and tweak_data.weapon.stats.extra_ammo[ammo] or 0
 				elseif stat.name == "totalammo" then
-					local chosen_index = tweak_factory[mod.name].stats.total_ammo_mod or 0
+					local chosen_index = part_data.stats.total_ammo_mod or 0
 					chosen_index = math.clamp(base_stats[stat.name].index + chosen_index, 1, #tweak_stats.total_ammo_mod)
 					mod[stat.name] = base_stats[stat.name].value * tweak_stats.total_ammo_mod[chosen_index]
 				else
-					local chosen_index = tweak_factory[mod.name].stats[stat.name] or 0
+					local chosen_index = part_data.stats[stat.name] or 0
 					if tweak_stats[stat.name] then
 						index = math.clamp(curr_stats[stat.name].index + chosen_index, 1, #tweak_stats[stat.name])
 						mod[stat.name] = stat.index and index or tweak_stats[stat.name][index] * tweak_data.gui.stats_present_multiplier
@@ -796,7 +790,7 @@ function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats,
 							if stat.revert then max_stat = max_stat - offset end
 							mod[stat.name] = max_stat - mod[stat.name]
 						end
-						if modifier_stats and modifier_stats[stat.name] and not stat.offset and stat.name == "damage" then
+						if modifier_stats and modifier_stats[stat.name] and stat.name == "damage" then
 							local mod_stat = modifier_stats[stat.name]
 							if stat.revert and not stat.index then
 								local real_base_value = tweak_stats[stat.name][index]
@@ -817,6 +811,7 @@ function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats,
 						mod[stat.name] = mod[stat.name] - curr_stats[stat.name].value
 					end
 				end
+				if toggle_index_stats and stat.name ~= "magazine" then mod[stat.name] = part_data.stats[stat.name] or 0 end
 			end
 		end
 	end
@@ -1206,7 +1201,7 @@ function BlackMarketGui:_setup_weapon_stat_damage(weapon, tweak, name, category,
 		{id = "shield", name = "Shield"},
 		{id = "taser", name = "Taser"},
 		{id = "spooc", name = "Cloaker"},
-		--{id = "tank", name = "Bulldozer"}, --manually overriden for faceplate calcs
+		--{id = "tank", name = "Bulldozer"}, --manually overridden for faceplate calcs
 	}
 	
 	table.insert(elements, {label = "Headshots to kill on Overkill:"})
@@ -1350,11 +1345,26 @@ end
 
 function BlackMarketGui:_setup_melee_weapon_stat_damage(melee)
 	local elements = {}
+	local base_stats, mods_stats, skill_stats = self:_get_melee_weapon_stats(self._slot_data.name)
+	local uncharged_damage = base_stats["damage"].min_value + mods_stats["damage"].min_value + skill_stats["damage"].min_value
+	local charged_damage = base_stats["damage"].max_value + mods_stats["damage"].max_value + skill_stats["damage"].max_value
+	local uncharged_kd = base_stats["damage_effect"].min_value + mods_stats["damage_effect"].min_value + skill_stats["damage_effect"].min_value
+	local charged_kd = base_stats["damage_effect"].max_value + mods_stats["damage_effect"].max_value + skill_stats["damage_effect"].max_value
+	local charge_time = base_stats["charge_time"].value + mods_stats["charge_time"].value + skill_stats["charge_time"].value
 	
 	table.insert(elements, {label = "Attack Delay:", format = "%0.2fs", args = {melee.instant and 0 or melee.melee_damage_delay}})
 	table.insert(elements, {label = "Cooldown:", format = "%0.2fs", args = {melee.repeat_expire_t}})
 	if not melee.instant then table.insert(elements, {label = "Unequip Delay:", format = "%0.2fs", args = {melee.expire_t}}) end
-	--table.insert(elements, {type = "space"})
+	table.insert(elements, {type = "space"})
+	if melee.instant then
+		table.insert(elements, {label = "DPS:", format = "%0.2f", args = {uncharged_damage / melee.repeat_expire_t}})
+		table.insert(elements, {label = "KDPS:", format = "%0.2f", args = {uncharged_kd / melee.repeat_expire_t}})
+	else
+		table.insert(elements, {label = "Uncharged DPS:", format = "%0.2f", args = {uncharged_damage / melee.repeat_expire_t}})
+		table.insert(elements, {label = "Charged DPS:", format = "%0.2f", args = {charged_damage / (melee.repeat_expire_t + charge_time)}})
+		table.insert(elements, {label = "Uncharged KDPS:", format = "%0.2f", args = {uncharged_kd / melee.repeat_expire_t}})
+		table.insert(elements, {label = "Charged KDPS:", format = "%0.2f", args = {charged_kd / (melee.repeat_expire_t + charge_time)}})
+	end
 	
 	self:_setup_popup_panel(elements)
 end
