@@ -1322,13 +1322,13 @@ function InventoryStatsPopup:_primaries_totalammo()
 	self:row():l_text("Ammo Pickup Range:")
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.2f - %.2f", {data = {pickup[1], pickup[2]}})
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.2f - %.2f", {data = {pickup[1] * ammo_pickup_min_mul, pickup[2] * ammo_pickup_max_mul}})
-	self:row({ h = 15 })
 	
 	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
 	local damage = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
 	local totalammo = base_stats["totalammo"].value + mods_stats["totalammo"].value + skill_stats["totalammo"].value
 	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
 	
+	self:row({ h = 15 })
 	self:row():l_text("Damage Potential:")
 	self:row({ s = 0.9 }):l_text("\tPer Pickup (avg):"):r_text("%.1f", {data = {(damage * pickup[1] * ammo_pickup_min_mul + damage * pickup[2] * ammo_pickup_max_mul) / 2}})
 	self:row({ s = 0.9 }):l_text("\tPer Magazine:"):r_text("%.1f", {data = {damage * mag}})
@@ -1497,11 +1497,8 @@ function InventoryStatsPopup:_primaries_concealment()
 	local near_mul = ammo_data and ammo_data.damage_near_mul or 1
 	local far_mul = ammo_data and ammo_data.damage_far_mul or 1
 
-	if ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" then
-		self:row():l_text("Blast Radius:"):r_text("%dm", {data = {2}})
-	else
-		self:row():l_text("Shotgun Pellets:"):r_text("%dm", {data = {ammo_data and ammo_data.rays or tweak.rays}})
-	end
+	if ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" then self:row():l_text("Blast Radius:"):r_text("%dm", {data = {2}}) end
+	self:row():l_text("Shotgun Pellets:"):r_text("%d", {data = {ammo_data and ammo_data.rays or self._data.tweak.rays}})
 	self:row({ h = 15 })
 	self:row():l_text("Base Falloff Starts:"):r_text("%.2fm", {data = {near}})
 	self:row():l_text("Base Falloff Ends:"):r_text("%.2fm", {data = {near + far}})
