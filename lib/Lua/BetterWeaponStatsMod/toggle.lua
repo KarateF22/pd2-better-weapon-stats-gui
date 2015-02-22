@@ -1,4 +1,3 @@
-managers.menu_component._blackmarket_gui:_remove_stats_popup()
 if toggle_greater_precision then
 	toggle_greater_precision = false
 	toggle_index_stats = true

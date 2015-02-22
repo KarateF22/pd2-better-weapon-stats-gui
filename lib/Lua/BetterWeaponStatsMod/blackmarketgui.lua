@@ -8,10 +8,8 @@ local _blackmarketgui_function_ptr4 = BlackMarketGui._get_mods_stats
 local _blackmarketgui_function_ptr5 = BlackMarketGui.show_stats
 local _blackmarketgui_function_ptr6 = BlackMarketGui._get_stats
 local _blackmarketgui_function_ptr7 = BlackMarketGui._get_weapon_mod_stats
-
-BlackMarketGui.BASE_MARGIN = 10
-BlackMarketGui.ELEMENT_MARGIN = 0
-BlackMarketGui.FONT_SCALE = 1.0
+local _blackmarketgui_function_ptr8 = BlackMarketGui._pre_reload
+local _blackmarketgui_function_ptr9 = BlackMarketGui.update_info_text
 
 
 
@@ -826,409 +824,626 @@ function BlackMarketGui:mouse_moved(o, x, y, ...)
 	if self._enabled and not self._renaming_item then
 		self:_check_popup(x, y)
 	end
-	
 	return _blackmarketgui_function_ptr1(self, o, x, y, ...)
 end
 
 
 
-function BlackMarketGui:_check_popup(x, y)
-	local show_popup
-	if self._rweapon_stats_panel:visible() and self._rweapon_stats_panel:inside(x, y) then
-		for i, stat_row in ipairs(self._rweapon_stats_panel:children()) do
-			if stat_row:visible() and stat_row:inside(x, y) then
-				if self._stats_shown[i] then
-					show_popup = true
-					self:_update_wpn_stats_popup(i)
-					break
-				end
-			end
-		end
-	end
+function BlackMarketGui:_pre_reload(...)
+	self:_delete_popups()
+	return _blackmarketgui_function_ptr8(self, ...)
+end
+
+
+
+function BlackMarketGui:update_info_text(...)
+	if not toggle_greater_precision then return _blackmarketgui_function_ptr9(self, ...) end
 	
-	if self._mweapon_stats_panel:visible() and self._mweapon_stats_panel:inside(x, y) then
-		for i, stat_row in ipairs(self._mweapon_stats_panel:children()) do
-			if stat_row:visible() and stat_row:inside(x, y) then
-				if self._mweapon_stats_shown[i] then
-					show_popup = true
-					self:_update_mwpn_stats_popup(i)
-					break
-				end
-			end
-		end
+	self:_check_update_info(self._slot_data, self._tabs[self._selected]._data)
+	return _blackmarketgui_function_ptr9(self, ...)
+end
+
+
+
+function BlackMarketGui:_delete_popups()
+	if self._equipped_stat_popup then
+		self._equipped_stat_popup:delete()
+		self._equipped_stat_popup = nil
 	end
-	
-	if self._armor_stats_panel:visible() and self._armor_stats_panel:inside(x, y) then
-		for i, stat_row in ipairs(self._armor_stats_panel:children()) do
-			if stat_row:visible() and stat_row:inside(x, y) then
-				if self._armor_stats_shown[i] then
-					show_popup = true
-					self:_update_armor_stats_popup(i)
-					break
-				end
-			end
-		end
-	end
-	
-	if not show_popup then
-		self:_remove_stats_popup()
+	if self._selected_stat_popup then
+		self._selected_stat_popup:delete()
+		self._selected_stat_popup = nil
 	end
 end
 
 
 
-function BlackMarketGui:_remove_stats_popup()
-	if self._stats_popup then
-		if alive(self._stats_popup) then
-			for _, child in pairs(self._stats_popup:children()) do
-				self._stats_popup:remove(child)
+function BlackMarketGui:_check_update_info(slot_data, tab_data)
+	if self._popup_stat then
+		self:_create_stat_popup()
+	end
+end
+
+
+
+function BlackMarketGui:_check_popup(x, y)
+	local panels = {
+		self._rweapon_stats_panel,
+		self._mweapon_stats_panel,
+		self._armor_stats_panel,
+	}
+	
+	for _, p in ipairs(panels) do
+		if p:visible() and p:inside(x, y) then
+			for i, stat_row in ipairs(p:children()) do
+				if stat_row:visible() and stat_row:inside(x, y) then
+					if self._popup_stat ~= i then
+						self._popup_stat = i
+						self:_create_stat_popup()
+					end
+					return
+				end
+			end
+		end
+	end
+	
+	self._popup_stat = nil
+	self:_delete_popups()
+end
+
+
+
+function BlackMarketGui:_create_stat_popup()
+	self._equipped_stat_popup = self._equipped_stat_popup or InventoryStatsPopup:new(self._panel, self._popup_stat, true)
+	self._equipped_stat_popup:update(self._popup_stat, self:_get_popup_data(true))
+	self._equipped_stat_popup:set_position(self._stats_panel:x() - 10 - self._equipped_stat_popup:w(), self._panel:h()/2 - self._equipped_stat_popup:h()/2)
+	
+	if not self._slot_data.equipped then
+		self._selected_stat_popup = self._selected_stat_popup or InventoryStatsPopup:new(self._panel, false)
+		self._selected_stat_popup:update(self._popup_stat, self:_get_popup_data(false))
+		self._selected_stat_popup:set_position(self._equipped_stat_popup._panel:x() - self._selected_stat_popup:w(), self._equipped_stat_popup._panel:y())
+	elseif self._selected_stat_popup then
+		self._selected_stat_popup:delete()
+		self._selected_stat_popup = nil
+	end
+end
+
+
+
+function BlackMarketGui:_get_popup_data(equipped)
+	local category = self._slot_data.category
+	local data
+
+	if tweak_data.weapon[self._slot_data.name] then
+		local slot = equipped and managers.blackmarket:equipped_weapon_slot(category) or self._slot_data.slot
+		local weapon = equipped and managers.blackmarket:equipped_item(category) or managers.blackmarket:get_crafted_category_slot(category, slot)
+		local name = equipped and weapon.weapon_id or weapon and weapon.weapon_id or self._slot_data.name
+		local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
+		local blueprint = managers.blackmarket:get_weapon_blueprint(category, slot)
+		
+		data = {
+			inventory_category = category,
+			inventory_slot = slot,
+			stat_table = self._stats_shown,
+			name = name,
+			localized_name = managers.localization:text(tweak_data.weapon[name].name_id),
+			category = tweak_data.weapon[name].category,
+			tweak = tweak_data.weapon[name],
+			weapon = weapon,
+			factory_id = factory_id,
+			blueprint = blueprint,
+			ammo_data = factory_id and blueprint and managers.weapon_factory:get_ammo_data_from_weapon(factory_id, blueprint),
+			silencer = factory_id and blueprint and managers.weapon_factory:has_perk("silencer", factory_id, blueprint),
+			weapon_modified = factory_id and blueprint and managers.blackmarket:is_weapon_modified(factory_id, blueprint),
+			stats = {
+				base = tweak_data.weapon[name].stats,
+				mod = factory_id and blueprint and managers.weapon_factory:get_stats(factory_id, blueprint) or {},
+			},
+		}
+		if data.tweak.category == "saw" then return nil end
+	elseif tweak_data.blackmarket.armors[self._slot_data.name] then
+		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
+		data = {
+			inventory_category = category,
+			--inventory_slot = slot,
+			stat_table = self._armor_stats_shown,
+			name = name,
+			localized_name = managers.localization:text(tweak_data.blackmarket.armors[name].name_id),
+			--category = tweak_data.weapon[name].category,
+			--tweak = tweak_data.weapon[name],
+			--factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name),
+			--blueprint = managers.blackmarket:get_weapon_blueprint(category, slot),
+		}
+	elseif tweak_data.blackmarket.melee_weapons[self._slot_data.name] then
+		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
+		data = {
+			inventory_category = category,
+			--inventory_slot = slot,
+			stat_table = self._mweapon_stats_shown,
+			name = name,
+			localized_name = managers.localization:text(tweak_data.blackmarket.melee_weapons[name].name_id),
+			--category = tweak_data.weapon[name].category,
+			--tweak = tweak_data.weapon[name],
+			--factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name),
+			--blueprint = managers.blackmarket:get_weapon_blueprint(category, slot),
+		}
+	else
+	--[[
+		local selected_mod = tweak_data.weapon.factory.parts[self._slot_data.name]
+		local equipped_mod
+
+		local category = self._slot_data.category
+		local slot = self._slot_data.slot		
+		local weapon = managers.blackmarket:get_crafted_category_slot(self._slot_data.category, self._slot_data.slot)
+		local name = weapon and weapon.weapon_id or self._slot_data.name
+		local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
+		local blueprint = managers.blackmarket:get_weapon_blueprint(category, slot)
+		local stats_mod = factory_id and blueprint and managers.weapon_factory:get_stats(factory_id, blueprint) or {}
+		local total_stats = {}
+		for k, v in pairs(tweak_data.weapon[name].stats) do
+			total_stats[k] = v + (stats_mod[k] or 0)
+			io.write("Total stats: " .. tostring(k) .. " -> " .. tostring(total_stats[k]) .. "\n")
+		end
+		
+		if blueprint then
+			for _, mod in ipairs(blueprint) do
+				if tweak_data.weapon.factory.parts[mod].type == selected_mod.type then
+					equipped_mod = tweak_data.weapon.factory.parts[mod]
+				end
 			end
 		end
 		
-		self._panel:remove(self._stats_popup)
-		self._stats_popup = nil
-		self._stats_popup_current_stat = nil
+		if selected_mod then
+			io.write("HAS SELECTED: " .. tostring(selected_mod.name_id) .. "\n")
+			for k, v in pairs(selected_mod.stats or {}) do
+				--io.write("\t" .. tostring(k) .. " -> " .. tostring(v) .. "\n")
+			end
+		end
+		if equipped_mod and selected_mod ~= equipped_mod then
+			io.write("HAS EQUIPPED: " .. tostring(equipped_mod.name_id) .. "\n")
+			for k, v in pairs(equipped_mod.stats or {}) do
+				--io.write("\t" .. tostring(k) .. " -> " .. tostring(v) .. "\n")
+			end
+		end
+	]]
+	end
+	
+	return data
+end
+
+
+
+InventoryStatsPopup = InventoryStatsPopup or class()
+
+InventoryStatsPopup.FONT_SCALE = 0.85
+InventoryStatsPopup.VERTICAL_MARGIN = 10
+InventoryStatsPopup.HORIZONTAL_MARGIN = 10
+InventoryStatsPopup.ROW_MARGIN = 0
+
+function InventoryStatsPopup:init(parent, equipped)
+	self._panel = parent:panel({ name = "stats_popup", visible = true, layer = 10, })
+	self._bg = self._panel:rect({ name = "bg", w = 10000, h = 10000, blend_mode = "normal", color = Color.black, layer = 10, })
+	self._left_border = self._panel:rect({ name = "left_border", h = 10000, w = 3, blend_mode = "normal", color = Color.white, layer = 10, })
+	self._right_border = self._panel:rect({ name = "right_border", h = 10000, w = 3, blend_mode = "normal", color = Color.white, layer = 10, })
+	self._top_border = self._panel:rect({ name = "top_border", h = 3, w = 10000, blend_mode = "normal", color = Color.white, layer = 10, })
+	self._bottom_border = self._panel:rect({ name = "bottom_border", h = 3, w = 10000, blend_mode = "normal", color = Color.white, layer = 10, })
+	self._header = self._panel:text({ name = "header", align = "center", vertical = "center", color = Color.white, layer = 10,
+		y = InventoryStatsPopup.VERTICAL_MARGIN,
+		font = tweak_data.menu.pd2_small_font,
+		font_size = tweak_data.menu.pd2_small_font_size * 1.25 * InventoryStatsPopup.FONT_SCALE,
+		h = tweak_data.menu.pd2_small_font_size * 1.5 * InventoryStatsPopup.FONT_SCALE,
+	})
+	
+	self._equipped = equipped
+	self._rows = {}
+end
+
+function InventoryStatsPopup:delete()
+	self:_clear()
+	for _, child in ipairs(self._panel:children()) do
+		self._panel:remove(child)
+	end
+	self._panel:parent():remove(self._panel)
+end
+
+function InventoryStatsPopup:_clear()
+	for _, row in ipairs(self._rows) do
+		row:delete()
+	end
+	
+	self._rows = {}
+	self._stat = nil
+	self._data = nil
+	self._panel:set_visible(false)
+end
+
+function InventoryStatsPopup:update(stat_index, data)
+	self:_clear()
+	if data then
+		self._stat = stat_index
+		self._data = data
+		
+		local cbk_name = string.format("_%s_%s", data.inventory_category, data.stat_table[stat_index].name)
+		if self[cbk_name] then
+			self[cbk_name](self)
+			return self:_finalize()
+		end
+	end
+end
+
+function InventoryStatsPopup:h()
+	return self._panel:h()
+end
+
+function InventoryStatsPopup:w()
+	return self._panel:w()
+end
+
+function InventoryStatsPopup:set_position(x, y)
+	self._panel:set_position(x, y)
+end
+
+function InventoryStatsPopup:_finalize()
+	if #self._rows <= 0 then
+		self._panel:set_visible(false)
+		return false
+	end
+	
+	self._header:set_text(self._data.localized_name .. (self._equipped and " (E)" or " (S)"))
+	local _, _, header_width, _ = self._header:text_rect()
+	local max_left_width = 0
+	local max_right_width = 0
+	local offset = self._header:bottom() + InventoryStatsPopup.VERTICAL_MARGIN
+	
+	for _, row in ipairs(self._rows) do
+		max_left_width = math.max(max_left_width, row:left_w())
+		max_right_width = math.max(max_right_width, row:right_w())
+	end
+	local max_width = math.max(max_left_width + max_right_width + 12 * InventoryStatsPopup.FONT_SCALE, header_width)
+	for _, row in ipairs(self._rows) do
+		row:set_top(offset)
+		row:set_w(max_width)
+		offset = offset + row:h()
+	end
+
+	offset = offset + InventoryStatsPopup.VERTICAL_MARGIN
+	self._panel:set_visible(true)
+	self._panel:set_size(max_width + InventoryStatsPopup.HORIZONTAL_MARGIN * 2, offset)
+	self._header:set_w(self._panel:w())
+	self._right_border:set_right(max_width + InventoryStatsPopup.HORIZONTAL_MARGIN * 2)
+	self._bottom_border:set_bottom(offset)
+	return true
+end
+
+function InventoryStatsPopup:_add_row(args)
+	local new_row = InventoryStatsPopupRow:new(self._panel, args and (args.height or args.h), args and (args.scale or args.s))
+	table.insert(self._rows, new_row)
+	return new_row
+end
+InventoryStatsPopup.row = InventoryStatsPopup._add_row
+
+function InventoryStatsPopup:_delete_row(row)
+	for i, r in ipairs(self._rows) do
+		if r == row then
+			table.remove(i)
+			break
+		end
+	end
+	row:delete()
+end
+
+function InventoryStatsPopup:_text_color(value, threshold, compare)
+	if compare == ">" then
+		return value > threshold and Color.green or value < threshold and Color.red or Color.white
+	else
+		return value < threshold and Color.green or value > threshold and Color.red or Color.white
 	end
 end
 
 
 
-function BlackMarketGui:_create_stats_popup()
-	local popup = self._panel:panel({
-		name = "stats_popup",
-		alpha = 1,
-		w = 0,
-		h = 0,
-		layer = 10,
+InventoryStatsPopupRow = InventoryStatsPopupRow or class()
+
+InventoryStatsPopupRow.COMPONENT_SPACING = 4
+
+function InventoryStatsPopupRow:init(parent, height, scale)
+	self._scale = scale or 1	
+	self._text_components = 0
+	self._total_left_width = 0
+	self._total_right_width = 0
+	self._left_aligned = {}
+	self._right_aligned = {}
+
+	self._panel = parent:panel({
+		name = "row",
+		h = ((height or tweak_data.menu.pd2_small_font_size) + InventoryStatsPopup.ROW_MARGIN) * InventoryStatsPopup.FONT_SCALE * self._scale,
+		layer = 11,
 	})
-	
-	popup:rect({
-		name = "bg",
-		blend_mode = "normal",
-		alpha = 1,
-		color = Color(1, 0, 0, 0),
-		layer = 50,
-	})
-	popup:rect({
-		name = "left_border",
-		blend_mode = "normal",
-		w = 2,
-		h = 0,
-		x = 0,
-		y = 0,
-		color = Color.white,
-		layer = 100,
-	})
-	popup:rect({
-		name = "right_border",
-		blend_mode = "normal",
-		w = 2,
-		h = 0,
-		x = 0,
-		y = 0,
-		color = Color.white,
-		layer = 100,
-	})
-	popup:rect({
-		name = "top_border",
-		blend_mode = "normal",
-		w = 0,
-		h = 2,
-		x = 0,
-		y = 0,
-		color = Color.white,
-		layer = 100,
-	})
-	popup:rect({
-		name = "bottom_border",
-		blend_mode = "normal",
-		w = 0,
-		h = 2,
-		x = 0,
-		y = 0,
-		color = Color.white,
-		layer = 100,
-	})
-	
-	return popup
 end
 
+function InventoryStatsPopupRow:delete()
+	for _, child in ipairs(self._panel:children()) do
+		self._panel:remove(child)
+	end
+	self._panel:parent():remove(self._panel)
+end
 
+function InventoryStatsPopupRow:add_left_text(text, args)
+	local args = args or {}
+	args.align = "left"
+	return self:add_text(text, args)
+end
+InventoryStatsPopupRow.l_text = InventoryStatsPopupRow.add_left_text
 
-function BlackMarketGui:_setup_popup_panel(elements)
-	local function format_text(text)
-		for k, _ in text:gmatch("([0-9]+%.[0-9]+)") do
-			text = text:gsub(k, string.format("%f", k):gsub('%.?0+$', ""))
+function InventoryStatsPopupRow:add_right_text(text, args)
+	local args = args or {}
+	args.align = "right"
+	return self:add_text(text, args)
+end
+InventoryStatsPopupRow.r_text = InventoryStatsPopupRow.add_right_text
+
+function InventoryStatsPopupRow:add_text(text, args)
+	local function format_numbers(text)
+		for num, _ in text:gmatch("([0-9]+%.[0-9]+)") do
+			text = text:gsub(num, string.format("%f", num):gsub('%.?0+$', ""))
 		end
 		return text
 	end
-	
-	local max_label_width = 0
-	local max_text_width = 0
-	local components = {}
 
-	for _, e in ipairs(elements or {}) do
-		if e.label or e.format then
-			local label, text
-			
-			if e.label then
-				label = self._stats_popup:text({
-					name = (e.name or "text") .. "_label",
-					text = tostring(e.label):gsub("\t", "   "),
-					align = "left",
-					vertical = "center",
-					w = 500,
-					h = e.h or tweak_data.menu.pd2_small_font_size * self.FONT_SCALE,
-					color = e.label_color or Color.white,
-					font = tweak_data.menu.pd2_small_font,
-					font_size = e.h or tweak_data.menu.pd2_small_font_size * self.FONT_SCALE,
-					layer = 100,
-				})
-				local _, _, w, _ = label:text_rect()
-				label:set_w(w)
-				max_label_width = math.max(max_label_width, w)
-			end
-			
-			if e.format then
-				text = self._stats_popup:text({
-					name = e.name or "text",
-					text = format_text(string.format(e.format, unpack(e.args or {}))),
-					align = "left",
-					vertical = "center",
-					horizontal = "right",
-					w = 500,
-					h = e.h or tweak_data.menu.pd2_small_font_size * self.FONT_SCALE,
-					color = e.format_color or Color.white,
-					font = tweak_data.menu.pd2_small_font,
-					font_size = e.h or tweak_data.menu.pd2_small_font_size * self.FONT_SCALE,
-					layer = 100,
-				})
-				local _, _, w, _ = text:text_rect()
-				text:set_w(w)
-				max_text_width = math.max(max_text_width, w)
-			end
-			
-			table.insert(components, { type = "text", label = label, text = text })
-		elseif e.type == "space" then
-			table.insert(components, { type = "space", h = e.h or tweak_data.menu.pd2_small_font_size * self.FONT_SCALE })
-		elseif e.type == "border" then
-			local border = self._stats_popup:rect({
-				name = e.name or "border",
-				blend_mode = "normal",
-				h = e.h or 1,
-				color = e.color or Color.white,
-				layer = 100,
-			})
-			
-			table.insert(components, { type = "border", border = border, margin = e.margin or 0 })
+	local args = args or {}
+	local text = string.format(text, unpack(args.data or {}))
+	local align = args.align == "right" and "right" or "left"
+	
+	text = args.no_trim and text or format_numbers(text)
+	local tmp = self._panel:text({
+		name = "text_" .. tostring(self._text_components),
+		text = text:gsub("\t", "   "),
+		align = align,
+		vertical = "center",
+		color = args.color or Color.white,
+		font = tweak_data.menu.pd2_small_font,
+		font_size = (args.font_size or (args.font_scale or 1) * (self._panel:h() - InventoryStatsPopup.ROW_MARGIN * InventoryStatsPopup.FONT_SCALE)) * self._scale,
+		h = self._panel:h(),
+		layer = 12,
+	})
+	local _, _, w, _ = tmp:text_rect()
+	
+	self._text_components = self._text_components + 1
+	tmp:set_w(w)
+	tmp:set_center(self._panel:center())
+	if align == "left" then
+		self._total_left_width = self._total_left_width + w
+		table.insert(self._left_aligned, tmp)
+	else
+		self._total_right_width = self._total_right_width + w
+		table.insert(self._right_aligned, 1, tmp)
+	end
+	return self
+end
+
+function InventoryStatsPopupRow:add_border(args)
+	local args = args or {}
+	local tmp = self._panel:rect({
+		blend_mode = "normal",
+		color = args.color or Color.white,
+		h = args.h or 1,
+		w = 10000,
+		layer = 12,
+	})
+	tmp:set_center(self._panel:center())
+	return self
+end
+
+function InventoryStatsPopupRow:set_w(width)
+	self._panel:set_w(width + InventoryStatsPopup.HORIZONTAL_MARGIN * 2)
+	
+	if #self._left_aligned > 0 then
+		self._left_aligned[1]:set_left(InventoryStatsPopup.HORIZONTAL_MARGIN)
+		for i = 2, #self._left_aligned, 1 do
+			self._left_aligned[i]:set_left(self._left_aligned[i-1]:right() + InventoryStatsPopupRow.COMPONENT_SPACING)
 		end
 	end
 	
-	local offset = self.BASE_MARGIN
-	local total_width = max_label_width + max_text_width + self.BASE_MARGIN * 3
-	for _, comp in ipairs(components) do
-		if comp.type == "text" then
-			if comp.label then
-				comp.label:set_top(offset)
-				comp.label:set_left(self.BASE_MARGIN)
-			end
-			if comp.text then
-				comp.text:set_top(offset)
-				comp.text:set_right(total_width - self.BASE_MARGIN)
-			end
-			offset = offset + (comp.text and comp.text:h() or comp.label and comp.label:h() or 0) + self.ELEMENT_MARGIN
-		elseif comp.type == "space" then
-			offset = offset + comp.h
-		elseif comp.type == "border" then
-			offset = offset + comp.margin
-			comp.border:set_top(offset - comp.border:h()/2)
-			comp.border:set_w(total_width)
-			offset = offset + comp.border:h() + comp.margin
+	if #self._right_aligned > 0 then
+		self._right_aligned[1]:set_right(self._panel:w() - InventoryStatsPopup.HORIZONTAL_MARGIN)
+		for i = 2, #self._right_aligned, 1 do
+			self._right_aligned[i]:set_right(self._right_aligned[i-1]:left() - InventoryStatsPopupRow.COMPONENT_SPACING)
 		end
 	end
-	offset = offset + math.max(0, self.BASE_MARGIN - self.ELEMENT_MARGIN)
-	
-	self._stats_popup:set_visible(elements and #elements > 0)
-	self._stats_popup:set_size(total_width, offset)
-	self._stats_popup:set_right(self._stats_panel:x() - 10)
-	self._stats_popup:set_y(self._panel:h()/2 - self._stats_popup:h()/2)
-	
-	self._stats_popup:child("bg"):set_size(total_width, offset)
-	self._stats_popup:child("left_border"):set_h(offset)
-	local right_border = self._stats_popup:child("right_border")
-	right_border:set_h(offset)
-	right_border:set_right(self._stats_popup:w())
-	self._stats_popup:child("top_border"):set_w(total_width)
-	local bottom_border = self._stats_popup:child("bottom_border")
-	bottom_border:set_w(total_width)
-	bottom_border:set_bottom(offset)
+end
+
+function InventoryStatsPopupRow:set_top(pos)
+	self._panel:set_top(pos)
+end
+
+function InventoryStatsPopupRow:w()
+	return self:left_w() + self:right_w()
+end
+
+function InventoryStatsPopupRow:h()
+	return self._panel:h()
+end
+
+function InventoryStatsPopupRow:left_w()
+	return self._total_left_width + (#self._left_aligned - 1) * InventoryStatsPopupRow.COMPONENT_SPACING
+end
+
+function InventoryStatsPopupRow:right_w()
+	return self._total_right_width + (#self._right_aligned - 1) * InventoryStatsPopupRow.COMPONENT_SPACING
 end
 
 
 
-function BlackMarketGui:_update_wpn_stats_popup(stat_index, force_update)
-	if self._stats_popup_current_stat ~= stat_index or not alive(self._stats_popup) or force_update then
-		self:_remove_stats_popup()
-		self._stats_popup = self:_create_stats_popup()
-		self._stats_popup_current_stat = stat_index
-		
-		local weapon = managers.blackmarket:get_crafted_category_slot(self._slot_data.category, self._slot_data.slot)
-		local blueprint = managers.blackmarket:get_weapon_blueprint(self._slot_data.category, self._slot_data.slot)
-		local name = weapon and weapon.weapon_id or self._slot_data.name
-		local tweak = tweak_data.weapon[name]
-		local category = tweak.category
-		
-		
-		if name == "saw" or name == "saw_secondary" then
-			self:_setup_popup_panel()
-		elseif self._stats_shown[stat_index].name == "magazine" then
-			self:_setup_weapon_stat_magazine(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "totalammo" then
-			self:_setup_weapon_stat_totalammo(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "fire_rate" then
-			self:_setup_weapon_stat_fire_rate(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "damage" then
-			self:_setup_weapon_stat_damage(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "spread" then
-			self:_setup_weapon_stat_spread(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "recoil" then
-			self:_setup_weapon_stat_recoil(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "concealment" then
-			self:_setup_weapon_stat_concealment(weapon, tweak, name, category, blueprint)
-		elseif self._stats_shown[stat_index].name == "suppression" then
-			self:_setup_weapon_stat_suppression(weapon, tweak, name, category, blueprint)
-		end 
-	end
-end
-
-
-
-function BlackMarketGui:_setup_weapon_stat_magazine(weapon, tweak, name, category, blueprint)
-	local elements = {}
-	
-	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
-	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(name, "reload_speed_multiplier", 1)))
+function InventoryStatsPopup:_primaries_magazine()
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
+	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(self._data.inventory_category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(self._data.name, "reload_speed_multiplier", 1)))
 	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
-	local reload_not_empty = tweak.timers and tweak.timers.reload_not_empty
-	local reload_empty = tweak.timers and tweak.timers.reload_empty
+	local reload_not_empty = self._data.tweak.timers and self._data.tweak.timers.reload_not_empty
+	local reload_empty = self._data.tweak.timers and self._data.tweak.timers.reload_empty
 	local rof = 60 / (base_stats["fire_rate"].value + mods_stats["fire_rate"].value + skill_stats["fire_rate"].value)
 	
 	if reload_not_empty and reload_empty then
 		if reload_not_empty ~= reload_empty then
-			table.insert(elements, {label = "Tactical Reload:", format = "%0.2fs", args = {reload_not_empty / reload_mul}})
-			table.insert(elements, {label = "Empty Reload:", format = "%0.2fs", args = {reload_empty / reload_mul}})
+			self:row():l_text("Reload Time:")
+			self:row({ s = 0.9 }):l_text("\tTactical:"):r_text("%.2fs", {data = {reload_not_empty / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tEmpty:"):r_text("%.2fs", {data = {reload_empty / reload_mul}})
 		else
-			table.insert(elements, {label = "Reload:", format = "%0.2fs", args = {reload_not_empty / reload_mul}})
+			self:row():l_text("Reload Time:"):r_text("%.2fs", {data = {reload_not_empty / reload_mul}})
 		end
 	else
-		if name == "striker" then
-			table.insert(elements, {label = "Single Shell Reload:", format = "%0.2fs", args = {1 / reload_mul}})
-			table.insert(elements, {label = "Each Additional Shell:", format = "%0.2fs", args = {18 / 30 / reload_mul}})
-			table.insert(elements, {label = "Full Reload:", format = "%0.2fs", args = {(12 / 30 + mag * 18 / 30) / reload_mul}})
-			table.insert(elements, {label = "End delay (Cancelable):", format = "%0.2fs", args = {0.4 / reload_mul}})
+		self:row():l_text("Reload Time:")
+		if self._data.name == "striker" then
+			self:row({ s = 0.9 }):l_text("\tFirst Shell:"):r_text("%.2fs", {data = {1 / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tEach Additional Shell:"):r_text("%.2fs", {data = {18 / 30 / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tFull:"):r_text("%.2fs", {data = {(12 / 30 + mag * 18 / 30) / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tEnd delay (Cancelable):"):r_text("%.2fs", {data = {0.4 / reload_mul}})
 		else
-			table.insert(elements, {label = "Single Shell Reload:", format = "%0.2fs", args = {(17 / 30 - 0.03) / reload_mul}})
-			table.insert(elements, {label = "Each Additional Shell:", format = "%0.2fs", args = {17 / 30 / reload_mul}})
-			table.insert(elements, {label = "Full Reload:", format = "%0.2fs", args = {(-0.03 + mag * 17 / 30) / reload_mul}})
-			table.insert(elements, {label = "End delay (Cancelable):"})
-			table.insert(elements, {label = "    Partial Reload:", format = "%0.2fs", args = {0.3 / reload_mul}})
-			table.insert(elements, {label = "    Full Reload:", format = "%0.2fs", args = {0.7 / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tFirst Shell:"):r_text("%.2fs", {data = {(17 / 30 - 0.03) / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tEach Additional Shell:"):r_text("%.2fs", {data = {17 / 30 / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tFull:"):r_text("%.2fs", {data = {(-0.03 + mag * 17 / 30) / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tEnd delay (Cancelable):")
+			self:row({ s = 0.81 }):l_text("\t\tPartial Reload:"):r_text("%.2fs", {data = {0.3 / reload_mul}})
+			self:row({ s = 0.81 }):l_text("\t\tFull Reload:"):r_text("%.2fs", {data = {0.7 / reload_mul}})
 		end
 	end
-	table.insert(elements, {label = "Time To Empty:", format = "%0.2fs", args = {mag * rof - rof}})
-	
-	self:_setup_popup_panel(elements)
+	self:row({ h = 15 })
+	self:row():l_text("Time To Empty:"):r_text("%.2fs", {data = {mag * rof - rof}})
 end
 
 
 
-function BlackMarketGui:_setup_weapon_stat_totalammo(weapon, tweak, name, category, blueprint)
-	local elements = {}
-	local pickup = tweak.AMMO_PICKUP
-	local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
-	local ammo_data = factory_id and blueprint and managers.weapon_factory:get_ammo_data_from_weapon(factory_id, blueprint)
+function InventoryStatsPopup:_primaries_totalammo()
+	local pickup = self._data.tweak.AMMO_PICKUP
+	local ammo_data = self._data.ammo_data
 	local skill_pickup = 1 + managers.player:upgrade_value("player", "pick_up_ammo_multiplier", 1) + managers.player:upgrade_value("player", "pick_up_ammo_multiplier_2", 1) - 2
 	local ammo_pickup_min_mul = ammo_data and ammo_data.ammo_pickup_min_mul or skill_pickup
 	local ammo_pickup_max_mul = ammo_data and ammo_data.ammo_pickup_max_mul or skill_pickup
 	
-	table.insert(elements, {label = "Base Ammo Pickup Range:", format = "%0.2f to %0.2f", args = {pickup[1], pickup[2]}})
-	table.insert(elements, {label = "Modified Ammo Pickup Range:", format = "%0.2f to %0.2f", args = {pickup[1] * ammo_pickup_min_mul, pickup[2] * ammo_pickup_max_mul}})
+	self:row():l_text("Ammo Pickup Range:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.2f - %.2f", {data = {pickup[1], pickup[2]}})
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.2f - %.2f", {data = {pickup[1] * ammo_pickup_min_mul, pickup[2] * ammo_pickup_max_mul}})
+	self:row({ h = 15 })
 	
-	self:_setup_popup_panel(elements)
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
+	local damage = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
+	local totalammo = base_stats["totalammo"].value + mods_stats["totalammo"].value + skill_stats["totalammo"].value
+	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
+	
+	self:row():l_text("Damage Potential:")
+	self:row({ s = 0.9 }):l_text("\tPer Pickup (avg):"):r_text("%.1f", {data = {(damage * pickup[1] * ammo_pickup_min_mul + damage * pickup[2] * ammo_pickup_max_mul) / 2}})
+	self:row({ s = 0.9 }):l_text("\tPer Magazine:"):r_text("%.1f", {data = {damage * mag}})
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.1f", {data = {damage * totalammo}})
 end
 
 
 
-function BlackMarketGui:_setup_weapon_stat_fire_rate(weapon, tweak, name, category, blueprint)
-	local elements = {}
-	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
-	local akimbo_mul = category == "akimbo" and 2 or 1
+function InventoryStatsPopup:_primaries_fire_rate()
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
+	local akimbo_mul = self._data.inventory_category == "akimbo" and 2 or 1
 	local rof = 60 / (base_stats["fire_rate"].value + mods_stats["fire_rate"].value + skill_stats["fire_rate"].value) / akimbo_mul
 	local dmg = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
 	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
-	local reload_not_empty = tweak.timers.reload_not_empty
-	local reload_empty = tweak.timers.reload_empty
+	local reload_not_empty = self._data.tweak.timers.reload_not_empty
+	local reload_empty = self._data.tweak.timers.reload_empty
 	
-	table.insert(elements, {label = "DPS:", format = "%0.1f", args = {dmg / rof}})
+	self:row():l_text("DPS:"):r_text("%.1f", {data = {dmg / rof}})
 	if reload_not_empty then
 		if reload_not_empty < reload_empty then
-			table.insert(elements, {label = "DPS (factoring reloads):", format = "%0.1f", args = {(dmg / rof) * ((mag - akimbo_mul) * rof) / ((mag - akimbo_mul) * rof + reload_not_empty)}})
+			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof) * ((mag - akimbo_mul) * rof) / ((mag - akimbo_mul) * rof + reload_not_empty)}})
 		else
-			table.insert(elements, {label = "DPS (factoring reloads):", format = "%0.1f", args = {(dmg / rof * (mag * rof)) / (mag * rof + reload_empty)}})
+			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof * (mag * rof)) / (mag * rof + reload_empty)}})
 		end
 	end
-	
-	self:_setup_popup_panel(elements)
 end
 
 
 
-function BlackMarketGui:_setup_weapon_stat_damage(weapon, tweak, name, category, blueprint)
-	local elements = {}
-	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
-	local damage_no_hs = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
-	local damage = damage_no_hs * managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
-	local character = tweak_data.character
-	local dozer_outer = math.ceil(150 / (math.ceil(damage_no_hs * 16.384) / 16.384))
-	local dozer_inner = math.ceil(160 / (math.ceil(damage_no_hs * 16.384) / 16.384))
-	local damage_to_remove_faceplates = (dozer_outer + dozer_inner) * damage_no_hs
-	local dozer_ok = math.ceil(512 / math.ceil(512 / ((character["tank"].HEALTH_INIT * 10 - damage_to_remove_faceplates) / (damage * character["tank"].headshot_dmg_mul))))
-	local dozer_dw = math.ceil(512 / math.ceil(512 / ((character["tank"].HEALTH_INIT * 10 * 1.7 - damage_to_remove_faceplates) / (damage * character["tank"].headshot_dmg_mul * .75))))
-	local enemies = {
-		{id = "fbi_swat", name = "FBI Swat (Green)"},
-		--{id = "city_swat", name = "GenSec Elite (Gray)"}, --this is broken
-		{id = "fbi_heavy_swat", name = "FBI Heavy Swat (Tan)"},
-		{id = "shield", name = "Shield"},
-		{id = "taser", name = "Taser"},
-		{id = "spooc", name = "Cloaker"},
-		--{id = "tank", name = "Bulldozer"}, --manually overridden for faceplate calcs
+function InventoryStatsPopup:_primaries_damage()
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
+	local damage_base = base_stats["damage"].value / 10
+	local damage_mod = mods_stats["damage"].value / 10
+	local damage_skill = skill_stats["damage"].value / 10
+	local damage_total = damage_base + damage_mod + damage_skill
+
+	local difficulties = {
+		{ id = "ok", name = "OK" },
+		{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
 	}
+	local enemies = {
+		{ id = "fbi_swat", name = "FBI Swat (Green)", difficulty_override = { dw = { hp = tweak_data.character.fbi_swat.HEALTH_INIT, hs = tweak_data.character.fbi_swat.headshot_dmg_mul }}},
+		{ id = "fbi_heavy_swat", name = "FBI Heavy Swat (Tan)"},
+		{ id = "city_swat", name = "Murky / GenSec Elite (Gray)", difficulty_override = { dw = { hp = 24, hs = tweak_data.character.fbi_swat.HEALTH_INIT / 8 }}},
+		{ id = "taser", name = "Taser", is_special = true },
+		{ id = "shield", name = "Shield", is_special = true , damage_mul = 1 },
+		{ id = "spooc", name = "Cloaker", is_special = true  },
+	}
+
+	local hs_mult = managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
+	local special_mult = managers.player:upgrade_value("weapon", "special_damage_taken_multiplier", 1)
 	
-	table.insert(elements, {label = "Headshots to kill on Overkill:"})
+	self:row():l_text("Headshots to kill:"):r_text("(OK / DW)")
 	for _, data in ipairs(enemies) do
-		table.insert(elements, {label = "    " .. data.name .. ":", format = "%d", args = {math.ceil(512 / math.ceil(512 / (character[data.id].HEALTH_INIT * 10 / (damage * character[data.id].headshot_dmg_mul))))}})
-	end
-	table.insert(elements, {label = "    Bulldozer :", format = "(%d+%d+%d) %d", args = {dozer_outer, dozer_inner, dozer_ok, dozer_outer + dozer_inner + dozer_ok}})
-	table.insert(elements, {label = "Headshots to kill on Death Wish:"})
-	table.insert(elements, {label = "    GenSec Elite (Gray):", format = "%d", args = {math.ceil(512 / math.ceil(512 / (240 / (damage * 1.625))))}})
-	for _, data in ipairs(enemies) do
-		if data.id ~= "fbi_swat" then
-			table.insert(elements, {label = "    " .. data.name .. ":", format = "%d", args = {math.ceil(512 / math.ceil(512 / (character[data.id].HEALTH_INIT * 10 * 1.7 / (damage * character[data.id].headshot_dmg_mul * .75))))}})
+		local row = self:row({ s = 0.9 }):l_text("\t\t" .. data.name .. ":")
+		for i, diff in ipairs(difficulties) do
+			local hp = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hp or (tweak_data.character[data.id].HEALTH_INIT * (diff.hp or 1))
+			local hs = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hs or (tweak_data.character[data.id].headshot_dmg_mul * (diff.hs or 1))
+			local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult
+			local adjusted_damage = math.ceil(math.max(raw_damage / (hp/512), 1)) * (hp/512)
+			row:r_text("%2d (%.2f)", { no_trim = true, data = { math.ceil(hp / adjusted_damage), hp / adjusted_damage }})
+			if i ~= #difficulties then
+				row:r_text("/")
+			end
 		end
 	end
-	table.insert(elements, {label = "    Bulldozer:", format = "(%d+%d+%d) %d", args = {dozer_outer, dozer_inner, dozer_dw, dozer_outer + dozer_inner + dozer_dw}})
-	self:_setup_popup_panel(elements)
+
+	--Dozer special case
+	for i, diff in ipairs(difficulties) do
+		local hp = tweak_data.character.tank.HEALTH_INIT * (diff.hp or 1)
+		local hs = tweak_data.character.tank.headshot_dmg_mul * (diff.hs or 1)
+		local adjusted_body_damage = math.ceil(math.max(damage_total * special_mult / (hp/512), 1)) * (hp/512)
+		local adjusted_hs_damage = math.ceil(math.max(damage_total * special_mult * hs * hs_mult / (hp/512), 1)) * (hp/512)
+		local adjusted_armor_damage = math.ceil(damage_total * special_mult * 16.384) / 16.384
+		local total_bullets = 0
+		
+		local is_dead
+		local str = "%2d ("
+		local str_data = {}
+		for i, armor_hp in ipairs({ 15, 16 }) do
+			if not is_dead then
+				local tmp_hp = armor_hp
+				
+				while hp > 0 and tmp_hp > 0 do
+					hp = hp - adjusted_body_damage
+					tmp_hp = tmp_hp - adjusted_armor_damage
+					total_bullets = total_bullets + 1
+				end
+				
+				is_dead = hp <= 0
+				str = str .. "%.2f" .. (is_dead and "" or " + ")
+				table.insert(str_data, armor_hp / adjusted_armor_damage)
+			end
+		end
+		
+		if not is_dead then
+			local bullets = hp / adjusted_hs_damage
+			total_bullets = total_bullets + math.ceil(bullets)
+			str = str .. "%.2f"
+			table.insert(str_data, bullets)
+		end
+		table.insert(str_data, 1, total_bullets)
+		
+		self:row({ s = 0.9 }):l_text("\t\tBulldozer (" .. diff.name .. "):"):r_text(str .. ")", { no_trim = true, data = str_data })
+	end
 end
 
 
 
-function BlackMarketGui:_setup_weapon_stat_spread(weapon, tweak, name, category, mods)
-	local elements = {}
-	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
+function InventoryStatsPopup:_primaries_spread()
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
 	local base_and_mod = (20 - (base_stats["spread"].value + mods_stats["spread"].value)) / 10
 	local skill_value = skill_stats["spread"].value
-	local global_spread_mul = tweak.stats_modifiers and tweak.stats_modifiers["spread"] or 1
-	local spread = tweak.spread
+	local global_spread_mul = self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers["spread"] or 1
+	local spread = self._data.tweak.spread
 	
 	local function DR(stance)
 		local stance_and_skill = stance - skill_value
@@ -1236,194 +1451,134 @@ function BlackMarketGui:_setup_weapon_stat_spread(weapon, tweak, name, category,
 		return (1 / (2 - stance_and_skill) * global_spread_mul * base_and_mod)
 	end
 	
-	table.insert(elements, {label = "Base + Mod Multiplier:", format = "%0.2f", args = {base_and_mod}})
-	if skill_value ~= 0 then table.insert(elements, {label = "Skill Additive Modifier:", format = "%0.2f", args = {skill_value * -1}}) end
-	if global_spread_mul ~= 1 then table.insert(elements, {label = "Innate Spread Multiplier:", format = "%0.2f", args = {global_spread_mul}}) end
-	table.insert(elements, {label = "Stance Spread Multipliers (Total Spread):"})
-	table.insert(elements, {label = "    ADS:", format = "%0.2f (%0.2f)", args = {spread.steelsight, DR(spread.steelsight)}})
-	table.insert(elements, {label = "    ADS-Moving:", format = "%0.2f (%0.2f)", args = {spread.moving_steelsight, DR(spread.moving_steelsight)}})
-	table.insert(elements, {label = "    Standing:", format = "%0.2f (%0.2f)", args = {spread.standing, DR(spread.standing)}})
-	table.insert(elements, {label = "    Standing-Moving:", format = "%0.2f (%0.2f)", args = {spread.moving_standing, DR(spread.moving_standing)}})
-	table.insert(elements, {label = "    Crouching:", format = "%0.2f (%0.2f)", args = {spread.crouching, DR(spread.crouching)}})
-	table.insert(elements, {label = "    Crouching-Moving:", format = "%0.2f (%0.2f)", args = {spread.moving_crouching, DR(spread.moving_crouching)}})
-	
-	self:_setup_popup_panel(elements)
+	self:row():l_text("Base & Mod Multiplier:"):r_text("%.2f", {data = {base_and_mod}})
+	if skill_value ~= 0 then self:row():l_text("Skill Additive Modifier:"):r_text("%.2f", {data = {skill_value * -1}}) end
+	if global_spread_mul ~= 1 then self:row():l_text("Innate Spread Multiplier:"):r_text("%.2f", {data = {global_spread_mul}}) end
+	self:row({ h = 15 })
+	self:row():l_text("Stance Spread Multipliers (Total Spread):")
+	self:row({ s = 0.9 }):l_text("\tADS:"):r_text("%.2f (%.2f)", {data = {spread.steelsight, DR(spread.steelsight)}})
+	self:row({ s = 0.9 }):l_text("\tADS-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_steelsight, DR(spread.moving_steelsight)}})
+	self:row({ s = 0.9 }):l_text("\tStanding:"):r_text("%.2f (%.2f)", {data = {spread.standing, DR(spread.standing)}})
+	self:row({ s = 0.9 }):l_text("\tStanding-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_standing, DR(spread.moving_standing)}})
+	self:row({ s = 0.9 }):l_text("\tCrouching:"):r_text("%.2f (%.2f)", {data = {spread.crouching, DR(spread.crouching)}})
+	self:row({ s = 0.9 }):l_text("\tCrouching-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_crouching, DR(spread.moving_crouching)}})
 end
 
 
 
-function BlackMarketGui:_setup_weapon_stat_recoil(weapon, tweak, name, category, blueprint)
-	local elements = {}
-	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
+function InventoryStatsPopup:_primaries_recoil()
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
 	local base_and_mod = (30 - (base_stats["recoil"].value + mods_stats["recoil"].value)) / 10
 	local skill = (30 - (base_stats["recoil"].value + mods_stats["recoil"].value + skill_stats["recoil"].value)) / 10 / base_and_mod
-	local kick = tweak.kick
+	local kick = self._data.tweak.kick
 	local recoil_mul = base_and_mod * skill
 	
-	table.insert(elements, {label = "Base + Mod Multiplier:", format = "%0.2f", args = {base_and_mod}})
-	table.insert(elements, {label = "Skill Multiplier:", format = "%0.2f", args = {skill}})
-	table.insert(elements, {label = "Base Vertical Kick Range:", format = "%0.2f to %0.2f", args = {kick.standing[1], kick.standing[2]}})
-	table.insert(elements, {label = "Base Horizontal Kick Range:", format = "%0.2f to %0.2f", args = {kick.standing[3], kick.standing[4]}})
-	table.insert(elements, {label = "Total Vertical Kick Range:", format = "%0.2f to %0.2f", args = {kick.standing[1] * recoil_mul, kick.standing[2] * recoil_mul}})
-	table.insert(elements, {label = "Total Horizontal Kick Range:", format = "%0.2f to %0.2f", args = {kick.standing[3] * recoil_mul, kick.standing[4] * recoil_mul}})
-
-	self:_setup_popup_panel(elements)
+	self:row():l_text("Base & Mod Multiplier:"):r_text("%.2f", {data = {base_and_mod}})
+	self:row():l_text("Skill Multiplier:"):r_text("%.2f", {data = {skill}})
+	self:row({ h = 15 })
+	self:row():l_text("Base Kick Range:")
+	self:row({ s = 0.9 }):l_text("\tVertical:"):r_text("%.2f to %.2f", {data = {kick.standing[1], kick.standing[2]}})
+	self:row({ s = 0.9 }):l_text("\tHorizontal:"):r_text("%.2f to %.2f", {data = {kick.standing[3], kick.standing[4]}})
+	self:row({ h = 15 })
+	self:row():l_text("Total Kick Range:")
+	self:row({ s = 0.9 }):l_text("\tVertical:"):r_text("%.2f to %.2f", {data = {kick.standing[1] * recoil_mul, kick.standing[2] * recoil_mul}})
+	self:row({ s = 0.9 }):l_text("\tHorizontal:"):r_text("%.2f to %.2f", {data = {kick.standing[3] * recoil_mul, kick.standing[4] * recoil_mul}})
 end
 
 
-function BlackMarketGui:_setup_weapon_stat_concealment(weapon, tweak, name, category, blueprint)
-	local elements = {}
-	if name == "gre_m79" then table.insert(elements, {label = "Blast Radius:", format = "%0.1fm", args = {3.5}}) end
-	if category ~= "shotgun" then return self:_setup_popup_panel(elements) end
+
+function InventoryStatsPopup:_primaries_concealment()
+	if self._data.name == "gre_m79" then self:row():l_text("Blast Radius:"):r_text("%.1fm", {data = {3.5}}) end
+	if self._data.category ~= "shotgun" then return end
 	
-	local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
-	local ammo_data = factory_id and blueprint and managers.weapon_factory:get_ammo_data_from_weapon(factory_id, blueprint)
-	local near = tweak.damage_near / 100
-	local far = tweak.damage_far / 100
+	local ammo_data = self._data.ammo_data
+	local near = self._data.tweak.damage_near / 100
+	local far = self._data.tweak.damage_far / 100
 	local near_mul = ammo_data and ammo_data.damage_near_mul or 1
 	local far_mul = ammo_data and ammo_data.damage_far_mul or 1
 
 	if ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" then
-		table.insert(elements, {label = "Blast Radius:", format = "%dm", args = {2}})
+		self:row():l_text("Blast Radius:"):r_text("%dm", {data = {2}})
 	else
-		table.insert(elements, {label = "Shotgun Pellets:", format = "%d", args = {ammo_data and ammo_data.rays or tweak.rays}})
+		self:row():l_text("Shotgun Pellets:"):r_text("%dm", {data = {ammo_data and ammo_data.rays or tweak.rays}})
 	end
-	table.insert(elements, {label = "Base Falloff Starts:", format = "%0.2fm", args = {near}})
-	table.insert(elements, {label = "Base Falloff Ends:", format = "%0.2fm", args = {near + far}})
+	self:row({ h = 15 })
+	self:row():l_text("Base Falloff Starts:"):r_text("%.2fm", {data = {near}})
+	self:row():l_text("Base Falloff Ends:"):r_text("%.2fm", {data = {near + far}})
 	if near_mul ~= 1 or far_mul ~= 1 then
-		table.insert(elements, {label = "Modified Falloff Starts:", format = "%0.2fm", args = {near * near_mul}})
-		table.insert(elements, {label = "Modified Falloff Ends:", format = "%0.2fm", args = {near * near_mul + far * far_mul}})
+		self:row({ h = 15 })
+		self:row():l_text("Total Falloff Starts:"):r_text("%.2fm", {data = {near * near_mul}})
+		self:row():l_text("Total Falloff Ends:"):r_text("%.2fm", {data = {near * near_mul + far * far_mul}})
 	end
-	
-	self:_setup_popup_panel(elements)
 end
 
 
 
-function BlackMarketGui:_setup_weapon_stat_suppression(weapon, tweak, name, category, blueprint)
-	if name == "gre_m79" then return end
-	local elements = {}
-	local panic_chance = tweak.panic_suppression_chance and tweak.panic_suppression_chance * 100
-	local base_stats, mods_stats, skill_stats = self:_get_stats(name, self._slot_data.category, self._slot_data.slot)
+function InventoryStatsPopup:_primaries_suppression()
+	if self._data.name == "gre_m79" then return end
+
+	local panic_chance = self._data.tweak.panic_suppression_chance and self._data.tweak.panic_suppression_chance * 100
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
 	local base_and_mod = (base_stats["suppression"].value + mods_stats["suppression"].value + 2) / 10
-	local skill = managers.blackmarket:threat_multiplier(name, category, false)
-	local global_suppression_mul = tweak.stats_modifiers and tweak.stats_modifiers["suppression"] or 1
+	local skill = managers.blackmarket:threat_multiplier(self._data.name, self._data.inventory_category, false)
+	local global_suppression_mul = self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers["suppression"] or 1
 	
-	if panic_chance then table.insert(elements, {label = "Panic Chance (requires Disturbing the Peace):", format = "%d%%", args = {panic_chance}}) end
-	table.insert(elements, {label = "Base + Mod Suppression:", format = "%0.2f", args = {base_and_mod}})
-	table.insert(elements, {label = "Skill Multiplier:", format = "%0.2f", args = {skill}})
-	if global_suppression_mul ~= 1 then table.insert(elements, {label = "Innate Suppression Multiplier:", format = "%0.2f", args = {global_suppression_mul}}) end
-	table.insert(elements, {label = "Total Maximum Suppression:", format = "%0.2f", args = {base_and_mod * skill * global_suppression_mul}})
-	self:_setup_popup_panel(elements)
+	if panic_chance then self:row():l_text("Panic Chance (requires Disturbing the Peace):"):r_text("%d%%", {data = {panic_chance}}) end
+	self:row():l_text("Base + Mod Suppression:"):r_text("%.2f", {data = {base_and_mod}})
+	self:row():l_text("Skill Multiplier:"):r_text("%.2f", {data = {skill}})
+	if global_suppression_mul ~= 1 then self:row():l_text("Innate Suppression Multiplier:"):r_text("%.2f", {data = {global_suppression_mul}}) end
+	self:row({ h = 15 })
+	self:row():l_text("Total Maximum Suppression:"):r_text("%.2f", {data = {base_and_mod * skill * global_suppression_mul}})
 end
 
 
 
-function BlackMarketGui:_update_mwpn_stats_popup(stat_index, force_update)
-	if self._stats_popup_current_stat ~= stat_index or not alive(self._stats_popup) or force_update then
-		self:_remove_stats_popup()
-		self._stats_popup = self:_create_stats_popup()
-		self._stats_popup_current_stat = stat_index
-		
-		local melee = managers.blackmarket:get_melee_weapon_data(self._slot_data.name)
-		
-		if self._mweapon_stats_shown[stat_index].name == "damage" then
-			self:_setup_melee_weapon_stat_damage(melee)
-		elseif self._mweapon_stats_shown[stat_index].name == "damage_effect" then
-			self:_setup_melee_weapon_stat_damage_effect(melee)
-		elseif self._mweapon_stats_shown[stat_index].name == "charge_time" then
-			self:_setup_melee_weapon_stat_charge_time(melee)
-		elseif self._mweapon_stats_shown[stat_index].name == "range" then
-			self:_setup_melee_weapon_stat_range(melee)
-		elseif self._mweapon_stats_shown[stat_index].name == "concealment" then
-			self:_setup_melee_weapon_stat_concealment(melee)
-		end 
-	end
-end
+InventoryStatsPopup._secondaries_magazine = InventoryStatsPopup._primaries_magazine
+InventoryStatsPopup._secondaries_totalammo = InventoryStatsPopup._primaries_totalammo
+InventoryStatsPopup._secondaries_damage = InventoryStatsPopup._primaries_damage
+InventoryStatsPopup._secondaries_fire_rate = InventoryStatsPopup._primaries_fire_rate
+InventoryStatsPopup._secondaries_spread = InventoryStatsPopup._primaries_spread
+InventoryStatsPopup._secondaries_recoil = InventoryStatsPopup._primaries_recoil
+InventoryStatsPopup._secondaries_concealment = InventoryStatsPopup._primaries_concealment
+InventoryStatsPopup._secondaries_suppression = InventoryStatsPopup._primaries_suppression
 
 
 
-function BlackMarketGui:_setup_melee_weapon_stat_damage(melee)
-	local elements = {}
-	local base_stats, mods_stats, skill_stats = self:_get_melee_weapon_stats(self._slot_data.name)
+function InventoryStatsPopup:_melee_weapons_damage()
+	local melee = managers.blackmarket:get_melee_weapon_data(self._data.name)
+	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_melee_weapon_stats(self._data.name)
 	local uncharged_damage = base_stats["damage"].min_value + mods_stats["damage"].min_value + skill_stats["damage"].min_value
 	local charged_damage = base_stats["damage"].max_value + mods_stats["damage"].max_value + skill_stats["damage"].max_value
 	local uncharged_kd = base_stats["damage_effect"].min_value + mods_stats["damage_effect"].min_value + skill_stats["damage_effect"].min_value
 	local charged_kd = base_stats["damage_effect"].max_value + mods_stats["damage_effect"].max_value + skill_stats["damage_effect"].max_value
 	local charge_time = base_stats["charge_time"].value + mods_stats["charge_time"].value + skill_stats["charge_time"].value
 	
-	table.insert(elements, {label = "Attack Delay:", format = "%0.2fs", args = {melee.instant and 0 or melee.melee_damage_delay}})
-	table.insert(elements, {label = "Cooldown:", format = "%0.2fs", args = {melee.repeat_expire_t}})
-	if not melee.instant then table.insert(elements, {label = "Unequip Delay:", format = "%0.2fs", args = {melee.expire_t}}) end
-	table.insert(elements, {type = "space"})
+	self:row():l_text("Attack Delay:"):r_text("%.2fs", {data = {melee.instant and 0 or melee.melee_damage_delay}})
+	self:row():l_text("Cooldown:"):r_text("%.2fs", {data = {melee.repeat_expire_t}})
+	if not melee.instant then self:row():l_text("Unequip Delay:"):r_text("%.2fs", {data = {melee.expire_t}}) end
+	self:row({ h = 15 })
 	if melee.instant then
-		table.insert(elements, {label = "DPS:", format = "%0.2f", args = {uncharged_damage / melee.repeat_expire_t}})
-		table.insert(elements, {label = "KDPS:", format = "%0.2f", args = {uncharged_kd / melee.repeat_expire_t}})
+		self:row():l_text("DPS:"):r_text("%.2fs", {data = {uncharged_damage / melee.repeat_expire_t}})
+		self:row():l_text("KdPS:"):r_text("%.2fs", {data = {uncharged_kd / melee.repeat_expire_t}})
 	else
-		table.insert(elements, {label = "Uncharged DPS:", format = "%0.2f", args = {uncharged_damage / melee.repeat_expire_t}})
-		table.insert(elements, {label = "Charged DPS:", format = "%0.2f", args = {charged_damage / (melee.repeat_expire_t + charge_time)}})
-		table.insert(elements, {label = "Uncharged KDPS:", format = "%0.2f", args = {uncharged_kd / melee.repeat_expire_t}})
-		table.insert(elements, {label = "Charged KDPS:", format = "%0.2f", args = {charged_kd / (melee.repeat_expire_t + charge_time)}})
-	end
-	
-	self:_setup_popup_panel(elements)
-end
-
-
-
-function BlackMarketGui:_setup_melee_weapon_stat_damage_effect(melee)
-	self:_setup_melee_weapon_stat_damage(melee)
-end
-
-
-
-function BlackMarketGui:_setup_melee_weapon_stat_charge_time(melee)
-	self:_setup_melee_weapon_stat_damage(melee)
-end
-
-
-
-function BlackMarketGui:_setup_melee_weapon_stat_range(melee)
-	self:_setup_melee_weapon_stat_damage(melee)
-end
-
-
-
-function BlackMarketGui:_setup_melee_weapon_stat_concealment(melee)
-	self:_setup_melee_weapon_stat_damage(melee)
-end
-
-
-
-function BlackMarketGui:_update_armor_stats_popup(stat_index, force_update)
-	if self._stats_popup_current_stat ~= stat_index or not alive(self._stats_popup) or force_update then
-		self:_remove_stats_popup()
-		self._stats_popup = self:_create_stats_popup()
-		self._stats_popup_current_stat = stat_index
-		
-		local armor_tweak = tweak_data.blackmarket.armors[self._slot_data.name]
-		local player_tweak = tweak_data.player
-		
-		if self._armor_stats_shown[stat_index].name == "armor" then
-			self:_setup_armor_stat_armor(armor_tweak, player_tweak)
-		elseif self._armor_stats_shown[stat_index].name == "concealment" then
-			self:_setup_armor_stat_concealment(armor_tweak, player_tweak)
-		elseif self._armor_stats_shown[stat_index].name == "movement" then
-			self:_setup_armor_stat_movement(armor_tweak, player_tweak)
-		elseif self._armor_stats_shown[stat_index].name == "dodge" then
-			self:_setup_armor_stat_dodge(armor_tweak, player_tweak)
-		elseif self._armor_stats_shown[stat_index].name == "damage_shake" then
-			self:_setup_armor_stat_damage_shake(armor_tweak, player_tweak)
-		elseif self._armor_stats_shown[stat_index].name == "stamina" then
-			self:_setup_armor_stat_stamina(armor_tweak, player_tweak)
-		end 
+		self:row():l_text("Uncharged DPS:"):r_text("%.2fs", {data = {uncharged_damage / melee.repeat_expire_t}})
+		self:row():l_text("Charged DPS:"):r_text("%.2fs", {data = {charged_damage / (melee.repeat_expire_t + charge_time)}})
+		self:row({ h = 15 })
+		self:row():l_text("Uncharged KdPS:"):r_text("%.2fs", {data = {uncharged_kd / melee.repeat_expire_t}})
+		self:row():l_text("Charged KdPS:"):r_text("%.2fs", {data = {charged_kd / (melee.repeat_expire_t + charge_time)}})
 	end
 end
 
+InventoryStatsPopup._melee_weapons_damage_effect = InventoryStatsPopup._melee_weapons_damage
+InventoryStatsPopup._melee_weapons_charge_time = InventoryStatsPopup._melee_weapons_damage
+InventoryStatsPopup._melee_weapons_range = InventoryStatsPopup._melee_weapons_damage
+InventoryStatsPopup._melee_weapons_concealment = InventoryStatsPopup._melee_weapons_damage
 
 
-function BlackMarketGui:_setup_armor_stat_armor(armor_tweak, player_tweak)
-	local elements = {}
+
+function InventoryStatsPopup:_armors_armor()
+	local armor_tweak = tweak_data.blackmarket.armors[self._data.name]
+	local player_tweak = tweak_data.player
 	local health = player_tweak.damage.HEALTH_INIT * 10
 	local health_mul = 1 + managers.player:upgrade_value("player", "health_multiplier", 1) + managers.player:upgrade_value("player", "passive_health_multiplier", 1) + managers.player:team_upgrade_value("health", "passive_multiplier", 1) - 3
 	local speed = player_tweak.movement_state.standard.movement.speed
@@ -1433,42 +1588,19 @@ function BlackMarketGui:_setup_armor_stat_armor(armor_tweak, player_tweak)
 	local steelsight_mul = armor_mul + managers.player:upgrade_value("player", "steelsight_speed_multiplier", 1) + managers.player:upgrade_value("player", "movement_speed_multiplier", 1) - 2
 	local crouch_mul = armor_mul + managers.player:upgrade_value("player", "crouch_speed_multiplier", 1) + managers.player:upgrade_value("player", "movement_speed_multiplier", 1) - 2
 	
-	table.insert(elements, {label = "Base Player Health:", format = "%0.1f", args = {health}})
-	table.insert(elements, {label = "Total Player Health:", format = "%0.1f", args = {health * health_mul}})
-	table.insert(elements, {label = "Walk Speed:", format = "%0.3f m/s", args = {speed.STANDARD_MAX * walking_mul / 100}})
-	table.insert(elements, {label = "Sprint Speed:", format = "%0.3f m/s", args = {speed.RUNNING_MAX * running_mul / 100}})
-	table.insert(elements, {label = "Crouch Speed:", format = "%0.3f m/s", args = {speed.CROUCHING_MAX * crouch_mul / 100}})
-	table.insert(elements, {label = "ADS Speed:", format = "%0.3f m/s", args = {managers.player:has_category_upgrade("player", "steelsight_normal_movement_speed") and (speed.STANDARD_MAX * walking_mul / 100) or (speed.STEELSIGHT_MAX * steelsight_mul / 100)}})
-	
-	self:_setup_popup_panel(elements)
+	self:row():l_text("Player Health:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.1f", {data = {health}})
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.1f", {data = {health * health_mul}})
+	self:row({ h = 15 })
+	self:row():l_text("Movement Speed:")
+	self:row({ s = 0.9 }):l_text("\tWalking:"):r_text("%.3f m/s", {data = {speed.STANDARD_MAX * walking_mul / 100}})
+	self:row({ s = 0.9 }):l_text("\tSprinting:"):r_text("%.3f m/s", {data = {speed.RUNNING_MAX * running_mul / 100}})
+	self:row({ s = 0.9 }):l_text("\tCrouching:"):r_text("%.3f m/s", {data = {speed.CROUCHING_MAX * crouch_mul / 100}})
+	self:row({ s = 0.9 }):l_text("\tAiming:"):r_text("%.3f m/s", {data = {managers.player:has_category_upgrade("player", "steelsight_normal_movement_speed") and (speed.STANDARD_MAX * walking_mul / 100) or (speed.STEELSIGHT_MAX * steelsight_mul / 100)}})
 end
 
-
-
-function BlackMarketGui:_setup_armor_stat_concealment(armor_tweak, player_tweak)
-	self:_setup_armor_stat_armor(armor_tweak, player_tweak)
-end
-
-
-
-function BlackMarketGui:_setup_armor_stat_movement(armor_tweak, player_tweak)
-	self:_setup_armor_stat_armor(armor_tweak, player_tweak)
-end
-
-
-
-function BlackMarketGui:_setup_armor_stat_dodge(armor_tweak, player_tweak)
-	self:_setup_armor_stat_armor(armor_tweak, player_tweak)
-end
-
-
-
-function BlackMarketGui:_setup_armor_stat_damage_shake(armor_tweak, player_tweak)
-	self:_setup_armor_stat_armor(armor_tweak, player_tweak)
-end
-
-
-
-function BlackMarketGui:_setup_armor_stat_stamina(armor_tweak, player_tweak)
-	self:_setup_armor_stat_armor(armor_tweak, player_tweak)
-end
+InventoryStatsPopup._armors_concealment = InventoryStatsPopup._armors_armor
+InventoryStatsPopup._armors_movement = InventoryStatsPopup._armors_armor
+InventoryStatsPopup._armors_dodge = InventoryStatsPopup._armors_armor
+InventoryStatsPopup._armors_damage_shake = InventoryStatsPopup._armors_armor
+InventoryStatsPopup._armors_stamina = InventoryStatsPopup._armors_armor
