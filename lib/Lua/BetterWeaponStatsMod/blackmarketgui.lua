@@ -920,6 +920,18 @@ function BlackMarketGui:_get_popup_data(equipped)
 		local name = equipped and weapon.weapon_id or weapon and weapon.weapon_id or self._slot_data.name
 		local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
 		local blueprint = managers.blackmarket:get_weapon_blueprint(category, slot)
+		local custom_stats = factory_id and blueprint and managers.weapon_factory:get_custom_stats_from_weapon(factory_id, blueprint)
+		local ammo_data = {}
+		if custom_stats then
+			for _, stats in pairs(custom_stats) do
+				if stats.ammo_pickup_min_mul then
+					ammo_data.ammo_pickup_min_mul = stats.ammo_pickup_min_mul
+				end
+				if stats.ammo_pickup_max_mul then
+					ammo_data.ammo_pickup_max_mul = stats.ammo_pickup_max_mul
+				end
+			end
+		end
 		
 		data = {
 			inventory_category = category,
@@ -932,7 +944,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 			weapon = weapon,
 			factory_id = factory_id,
 			blueprint = blueprint,
-			ammo_data = factory_id and blueprint and managers.weapon_factory:get_ammo_data_from_weapon(factory_id, blueprint),
+			ammo_data = ammo_data,
 			silencer = factory_id and blueprint and managers.weapon_factory:has_perk("silencer", factory_id, blueprint),
 			weapon_modified = factory_id and blueprint and managers.blackmarket:is_weapon_modified(factory_id, blueprint),
 			stats = {
