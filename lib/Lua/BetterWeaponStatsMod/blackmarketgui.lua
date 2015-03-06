@@ -304,6 +304,7 @@ function BlackMarketGui:show_stats()
 				end
 				
 				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate" or toggle_index_stats) and "%0.0f" or "%0.2f"
+				if stat.name == "damage" and (value2 > 9999 or based > 9999 or mod > 9999) then decimals = "%0.1f" end
 				
 				self._stats_texts[stat.name].equip:set_text(string.format(decimals, value2) or "")
 				self._stats_texts[stat.name].base:set_text(string.format(decimals, based) or "")
@@ -329,13 +330,14 @@ function BlackMarketGui:show_stats()
 			
 				local equip = equip_base_stats[stat.name].value + equip_mods_stats[stat.name].value + equip_skill_stats[stat.name].value
 				self._stats_texts[stat.name].equip:set_alpha(0.75)
-				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or toggle_index_stats) and "%0.0f" or "%0.2f"
+				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate" or toggle_index_stats) and "%0.0f" or "%0.2f"
 				local equip2 = equip - ((stat.name == "spread" or toggle_index_stats) and equip_skill_stats[stat.name].value or 0)
+				local value2 = value - ((stat.name == "spread" or toggle_index_stats) and skill_stats[stat.name].value or 0)
+				if stat.name == "damage" and (equip2 > 9999 or value2 > 9999) then decimals = "%0.1f" end
 				self._stats_texts[stat.name].equip:set_text(string.format(decimals, equip2))
 				self._stats_texts[stat.name].base:set_text("")
 				self._stats_texts[stat.name].mods:set_text("")
 				self._stats_texts[stat.name].skill:set_text("")
-				local value2 = value - ((stat.name == "spread" or toggle_index_stats) and skill_stats[stat.name].value or 0)
 				self._stats_texts[stat.name].total:set_text(string.format(decimals, value2))
 				if value2 > equip2 then
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.stats_positive)
@@ -1501,6 +1503,7 @@ end
 
 function InventoryStatsPopup:_primaries_concealment()
 	if self._data.name == "gre_m79" then self:row():l_text("Blast Radius:"):r_text("%.1fm", {data = {3.5}}) end
+	if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("%dm", {data = {5}}) end
 	if self._data.category ~= "shotgun" then return end
 	
 	local ammo_data = self._data.ammo_data
@@ -1524,7 +1527,7 @@ end
 
 
 function InventoryStatsPopup:_primaries_suppression()
-	if self._data.name == "gre_m79" then return end
+	if self._data.category == "grenade_launcher" then return end
 
 	local panic_chance = self._data.tweak.panic_suppression_chance and self._data.tweak.panic_suppression_chance * 100
 	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
