@@ -1,5 +1,4 @@
 toggle_greater_precision = true
-toggle_index_stats = false
 
 local _blackmarketgui_function_ptr1 = BlackMarketGui.mouse_moved
 local _blackmarketgui_function_ptr2 = BlackMarketGui._get_base_stats
@@ -223,7 +222,7 @@ end
 
 
 function BlackMarketGui:show_stats()
-	if not toggle_greater_precision and not toggle_index_stats then return _blackmarketgui_function_ptr5(self) end
+	if not toggle_greater_precision then return _blackmarketgui_function_ptr5(self) end
 
 	if not self._stats_panel or not self._rweapon_stats_panel or not self._armor_stats_panel or not self._mweapon_stats_panel then return end
 	self._stats_panel:hide()
@@ -281,36 +280,28 @@ function BlackMarketGui:show_stats()
 				local base = base_stats[stat.name].value
 				self._stats_texts[stat.name].equip:set_alpha(1)
 				local value2, based, mod, skill
-				if toggle_index_stats and not (stat.name == "magazine" or stat.name == "fire_rate") then
-					based = base_stats[stat.name].index
-					mod = mods_stats[stat.name].index
-					value2 = based + mod
+				if stat.name == "spread" then
+					local ads_spread_mul = tweak_data.weapon[name].spread.steelsight
+					if ads_spread_mul < 1 then ads_spread_mul = 1 / (2 - ads_spread_mul) end
+					ads_spread_mul = 1
+					based = 20 - ((20 - base) * ads_spread_mul)
+					mod = 20 - (20 - base - mods_stats[stat.name].value) * ads_spread_mul - based
 					skill = 0
+					value2 = based + mod
 				else
-					if stat.name == "spread" then
-						local ads_spread_mul = tweak_data.weapon[name].spread.steelsight
-						if ads_spread_mul < 1 then ads_spread_mul = 1 / (2 - ads_spread_mul) end
-						ads_spread_mul = 1
-						based = 20 - ((20 - base) * ads_spread_mul)
-						mod = 20 - (20 - base - mods_stats[stat.name].value) * ads_spread_mul - based
-						skill = 0
-						value2 = based + mod
-					else
-						value2 = value
-						based = base
-						mod = mods_stats[stat.name].value
-						skill = skill_stats[stat.name].value
-					end
+					value2 = value
+					based = base
+					mod = mods_stats[stat.name].value
+					skill = skill_stats[stat.name].value
 				end
 				
-				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate" or toggle_index_stats) and "%0.0f" or "%0.2f"
+				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate") and "%0.0f" or "%0.2f"
 				if stat.name == "damage" and (value2 > 9999 or based > 9999 or mod > 9999) then decimals = "%0.1f" end
 				
 				self._stats_texts[stat.name].equip:set_text(string.format(decimals, value2) or "")
 				self._stats_texts[stat.name].base:set_text(string.format(decimals, based) or "")
 				self._stats_texts[stat.name].mods:set_text((mods_stats[stat.name].value == 0 and "") or (mods_stats[stat.name].value > 0 and "+" or "") .. string.format(decimals, mod) or "")
-				if toggle_index_stats then self._stats_texts[stat.name].skill:set_text("")
-				elseif stat.name == "spread" then self._stats_texts[stat.name].skill:set_text("")
+				if stat.name == "spread" then self._stats_texts[stat.name].skill:set_text("")
 				else self._stats_texts[stat.name].skill:set_text(skill_stats[stat.name].skill_in_effect and ((skill_stats[stat.name].value > 0 and "+" or "") .. string.format(decimals, skill)) or "")
 				end
 				
@@ -330,9 +321,9 @@ function BlackMarketGui:show_stats()
 			
 				local equip = equip_base_stats[stat.name].value + equip_mods_stats[stat.name].value + equip_skill_stats[stat.name].value
 				self._stats_texts[stat.name].equip:set_alpha(0.75)
-				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate" or toggle_index_stats) and "%0.0f" or "%0.2f"
-				local equip2 = equip - ((stat.name == "spread" or toggle_index_stats) and equip_skill_stats[stat.name].value or 0)
-				local value2 = value - ((stat.name == "spread" or toggle_index_stats) and skill_stats[stat.name].value or 0)
+				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate") and "%0.0f" or "%0.2f"
+				local equip2 = equip - (stat.name == "spread" and equip_skill_stats[stat.name].value or 0)
+				local value2 = value - (stat.name == "spread" and skill_stats[stat.name].value or 0)
 				if stat.name == "damage" and (equip2 > 9999 or value2 > 9999) then decimals = "%0.1f" end
 				self._stats_texts[stat.name].equip:set_text(string.format(decimals, equip2))
 				self._stats_texts[stat.name].base:set_text("")
@@ -674,7 +665,7 @@ function BlackMarketGui:show_stats()
 			for stat_name, stat_text in pairs(self._stats_texts[stat.name]) do if stat_name ~= "name" then stat_text:set_text("") end end
 			for name, column in pairs(self._stats_texts[stat.name]) do column:set_alpha(stat_changed) end
 			
-			local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or toggle_index_stats) and "%0.0f" or "%0.2f"
+			local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment") and "%0.0f" or "%0.2f"
 			local value2, equip2
 			value2 = value
 			equip2 = equip
@@ -740,7 +731,7 @@ end
 
 
 function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats, mods_stats, equipped_mods)
-	if not toggle_greater_precision and not toggle_index_stats then return _blackmarketgui_function_ptr7(self, mod_name, weapon_name, base_stats, mods_stats, equipped_mods) end
+	if not toggle_greater_precision then return _blackmarketgui_function_ptr7(self, mod_name, weapon_name, base_stats, mods_stats, equipped_mods) end
 
 	local tweak_stats = tweak_data.weapon.stats
 	local tweak_factory = tweak_data.weapon.factory.parts
@@ -811,7 +802,6 @@ function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats,
 						mod[stat.name] = mod[stat.name] - curr_stats[stat.name].value
 					end
 				end
-				if toggle_index_stats and stat.name ~= "magazine" then mod[stat.name] = part_data.stats[stat.name] or 0 end
 			end
 		end
 	end
@@ -934,8 +924,11 @@ function BlackMarketGui:_get_popup_data(equipped)
 				end
 			end
 		end
-		
+		local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(name, category, slot)
 		data = {
+			base_stats = base_stats,
+			mods_stats = mods_stats,
+			skill_stats = skill_stats,
 			inventory_category = category,
 			inventory_slot = slot,
 			stat_table = self._stats_shown,
@@ -982,7 +975,50 @@ function BlackMarketGui:_get_popup_data(equipped)
 			--blueprint = managers.blackmarket:get_weapon_blueprint(category, slot),
 		}
 	else
-	--[[
+		local selected_mod = tweak_data.weapon.factory.parts[self._slot_data.name]
+		local equipped_mod
+		local blueprint = managers.blackmarket:get_weapon_blueprint(self._slot_data.category, self._slot_data.slot)
+		if blueprint then
+			for _, mod in ipairs(blueprint) do
+				if tweak_data.weapon.factory.parts[mod].type == selected_mod.type then
+					equipped_mod = tweak_data.weapon.factory.parts[mod]
+					break
+				end
+			end
+		end
+		local name = equipped and equipped_mod or selected_mod
+		local localized_name
+		if equipped_mod then
+			for _, mod in ipairs(tweak_data.weapon.factory[managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)].default_blueprint) do
+				if equipped_mod == tweak_data.weapon.factory.parts[mod] and equipped then
+					localized_name = "Default Part"
+					break
+				end
+			end
+		elseif equipped then
+			localized_name = "No Part"
+		end
+		data = {
+			inventory_category = "mods",
+			--inventory_slot = slot,
+			stat_table = self._stats_shown,
+			name = name,
+			localized_name = localized_name or managers.localization:text(name.name_id),
+			stats = equipped and not equipped_mod and {} or name.stats
+		}
+		-- if equipped_mod then
+			-- for _, mod in ipairs(tweak_data.weapon.factory[managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)].default_blueprint) do
+				-- if equipped_mod == tweak_data.weapon.factory.parts[mod] and equipped then
+					-- data.localized_name = "Default Part"
+					-- data.stats = {}
+					-- break
+				-- end
+			-- end
+		-- else
+			-- data.localized_name = "No Part"
+			-- data.stats = {}
+		-- end
+		--[[
 		local selected_mod = tweak_data.weapon.factory.parts[self._slot_data.name]
 		local equipped_mod
 
@@ -1006,9 +1042,16 @@ function BlackMarketGui:_get_popup_data(equipped)
 				end
 			end
 		end
+		data = {
+			inventory_category = "mods",
+			--inventory_slot = slot,
+			stat_table = self._stats_shown,
+			name = tweak_data.weapon.factory.parts[self._slot_data.name],
+			localized_name = managers.localization:text(tweak_data.weapon.factory.parts[self._slot_data.name].name_id)
+		}
 		
 		if selected_mod then
-			io.write("HAS SELECTED: " .. tostring(selected_mod.name_id) .. "\n")
+			io.write("HAS SELECTED: " .. data.localized_name .. "\n")
 			for k, v in pairs(selected_mod.stats or {}) do
 				--io.write("\t" .. tostring(k) .. " -> " .. tostring(v) .. "\n")
 			end
@@ -1019,7 +1062,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 				--io.write("\t" .. tostring(k) .. " -> " .. tostring(v) .. "\n")
 			end
 		end
-	]]
+		--]]
 	end
 	
 	return data
@@ -1289,12 +1332,11 @@ end
 
 
 function InventoryStatsPopup:_primaries_magazine()
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(self._data.inventory_category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(self._data.name, "reload_speed_multiplier", 1)))
-	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
+	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(self._data.category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(self._data.name, "reload_speed_multiplier", 1)))
+	local mag = self._data.base_stats["magazine"].value + self._data.mods_stats["magazine"].value + self._data.skill_stats["magazine"].value
 	local reload_not_empty = self._data.tweak.timers and self._data.tweak.timers.reload_not_empty
 	local reload_empty = self._data.tweak.timers and self._data.tweak.timers.reload_empty
-	local rof = 60 / (base_stats["fire_rate"].value + mods_stats["fire_rate"].value + skill_stats["fire_rate"].value)
+	local rof = 60 / (self._data.base_stats["fire_rate"].value + self._data.mods_stats["fire_rate"].value + self._data.skill_stats["fire_rate"].value)
 	
 	if reload_not_empty and reload_empty then
 		if reload_not_empty ~= reload_empty then
@@ -1333,14 +1375,20 @@ function InventoryStatsPopup:_primaries_totalammo()
 	local ammo_pickup_min_mul = ammo_data and ammo_data.ammo_pickup_min_mul or skill_pickup
 	local ammo_pickup_max_mul = ammo_data and ammo_data.ammo_pickup_max_mul or skill_pickup
 	
+	self:row():l_text("Index Values:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats["totalammo"].index}})
+	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats["totalammo"].index}})
+	local bounded_total = math.max(1, math.min(41, self._data.base_stats["totalammo"].index + self._data.mods_stats["totalammo"].index))
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
+	self:row({ h = 15 })
+	
 	self:row():l_text("Ammo Pickup Range:")
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.2f - %.2f", {data = {pickup[1], pickup[2]}})
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.2f - %.2f", {data = {pickup[1] * ammo_pickup_min_mul, pickup[2] * ammo_pickup_max_mul}})
 	
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local damage = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
-	local totalammo = base_stats["totalammo"].value + mods_stats["totalammo"].value + skill_stats["totalammo"].value
-	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
+	local damage = self._data.base_stats["damage"].value + self._data.mods_stats["damage"].value + self._data.skill_stats["damage"].value
+	local totalammo = self._data.base_stats["totalammo"].value + self._data.mods_stats["totalammo"].value + self._data.skill_stats["totalammo"].value
+	local mag = self._data.base_stats["magazine"].value + self._data.mods_stats["magazine"].value + self._data.skill_stats["magazine"].value
 	
 	self:row({ h = 15 })
 	self:row():l_text("Damage Potential:")
@@ -1352,11 +1400,10 @@ end
 
 
 function InventoryStatsPopup:_primaries_fire_rate()
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local akimbo_mul = self._data.inventory_category == "akimbo" and 2 or 1
-	local rof = 60 / (base_stats["fire_rate"].value + mods_stats["fire_rate"].value + skill_stats["fire_rate"].value) / akimbo_mul
-	local dmg = base_stats["damage"].value + mods_stats["damage"].value + skill_stats["damage"].value
-	local mag = base_stats["magazine"].value + mods_stats["magazine"].value + skill_stats["magazine"].value
+	local akimbo_mul = self._data.category == "akimbo" and 2 or 1
+	local rof = 60 / (self._data.base_stats["fire_rate"].value + self._data.mods_stats["fire_rate"].value + self._data.skill_stats["fire_rate"].value) / akimbo_mul
+	local dmg = self._data.base_stats["damage"].value + self._data.mods_stats["damage"].value + self._data.skill_stats["damage"].value
+	local mag = self._data.base_stats["magazine"].value + self._data.mods_stats["magazine"].value + self._data.skill_stats["magazine"].value
 	local reload_not_empty = self._data.tweak.timers.reload_not_empty
 	local reload_empty = self._data.tweak.timers.reload_empty
 	
@@ -1373,12 +1420,18 @@ end
 
 
 function InventoryStatsPopup:_primaries_damage()
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local damage_base = base_stats["damage"].value / 10
-	local damage_mod = mods_stats["damage"].value / 10
-	local damage_skill = skill_stats["damage"].value / 10
+	local damage_base = self._data.base_stats["damage"].value / 10
+	local damage_mod = self._data.mods_stats["damage"].value / 10
+	local damage_skill = self._data.skill_stats["damage"].value / 10
 	local damage_total = damage_base + damage_mod + damage_skill
 
+	self:row():l_text("Index Values:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats["damage"].index}})
+	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats["damage"].index}})
+	local bounded_total = math.max(1, math.min(35, self._data.base_stats["damage"].index + self._data.mods_stats["damage"].index))
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
+	self:row({ h = 15 })
+	
 	local difficulties = {
 		{ id = "ok", name = "OK" },
 		{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
@@ -1453,9 +1506,8 @@ end
 
 
 function InventoryStatsPopup:_primaries_spread()
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local base_and_mod = (20 - (base_stats["spread"].value + mods_stats["spread"].value)) / 10
-	local skill_value = skill_stats["spread"].value
+	local base_and_mod = (20 - (self._data.base_stats["spread"].value + self._data.mods_stats["spread"].value)) / 10
+	local skill_value = self._data.skill_stats["spread"].value
 	local global_spread_mul = self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers["spread"] or 1
 	local spread = self._data.tweak.spread
 	
@@ -1464,6 +1516,13 @@ function InventoryStatsPopup:_primaries_spread()
 		if stance_and_skill >= 1 then return (stance_and_skill * global_spread_mul * base_and_mod) end
 		return (1 / (2 - stance_and_skill) * global_spread_mul * base_and_mod)
 	end
+	
+	self:row():l_text("Index Values:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats["spread"].index}})
+	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats["spread"].index}})
+	local bounded_total = math.max(1, math.min(10, self._data.base_stats["spread"].index + self._data.mods_stats["spread"].index))
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
+	self:row({ h = 15 })
 	
 	self:row():l_text("Base & Mod Multiplier:"):r_text("%.2f", {data = {base_and_mod}})
 	if skill_value ~= 0 then self:row():l_text("Skill Additive Modifier:"):r_text("%.2f", {data = {skill_value * -1}}) end
@@ -1481,11 +1540,17 @@ end
 
 
 function InventoryStatsPopup:_primaries_recoil()
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local base_and_mod = (30 - (base_stats["recoil"].value + mods_stats["recoil"].value)) / 10
-	local skill = (30 - (base_stats["recoil"].value + mods_stats["recoil"].value + skill_stats["recoil"].value)) / 10 / base_and_mod
+	local base_and_mod = (30 - (self._data.base_stats["recoil"].value + self._data.mods_stats["recoil"].value)) / 10
+	local skill = (30 - (self._data.base_stats["recoil"].value + self._data.mods_stats["recoil"].value + self._data.skill_stats["recoil"].value)) / 10 / base_and_mod
 	local kick = self._data.tweak.kick
 	local recoil_mul = base_and_mod * skill
+	
+	self:row():l_text("Index Values:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats["recoil"].index}})
+	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats["recoil"].index}})
+	local bounded_total = math.max(1, math.min(15, self._data.base_stats["recoil"].index + self._data.mods_stats["recoil"].index))
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
+	self:row({ h = 15 })
 	
 	self:row():l_text("Base & Mod Multiplier:"):r_text("%.2f", {data = {base_and_mod}})
 	self:row():l_text("Skill Multiplier:"):r_text("%.2f", {data = {skill}})
@@ -1530,10 +1595,16 @@ function InventoryStatsPopup:_primaries_suppression()
 	if self._data.category == "grenade_launcher" then return end
 
 	local panic_chance = self._data.tweak.panic_suppression_chance and self._data.tweak.panic_suppression_chance * 100
-	local base_stats, mods_stats, skill_stats = managers.menu_component._blackmarket_gui:_get_stats(self._data.name, self._data.inventory_category, self._data.inventory_slot)
-	local base_and_mod = (base_stats["suppression"].value + mods_stats["suppression"].value + 2) / 10
-	local skill = managers.blackmarket:threat_multiplier(self._data.name, self._data.inventory_category, false)
+	local base_and_mod = (self._data.base_stats["suppression"].value + self._data.mods_stats["suppression"].value + 2) / 10
+	local skill = managers.blackmarket:threat_multiplier(self._data.name, self._data.category, false)
 	local global_suppression_mul = self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers["suppression"] or 1
+	
+	self:row():l_text("Index Values:")
+	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats["suppression"].index}})
+	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats["suppression"].index}})
+	local bounded_total = math.max(1, math.min(20, self._data.base_stats["suppression"].index + self._data.mods_stats["suppression"].index))
+	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
+	self:row({ h = 15 })
 	
 	if panic_chance then self:row():l_text("Panic Chance (requires Disturbing the Peace):"):r_text("%d%%", {data = {panic_chance}}) end
 	self:row():l_text("Base + Mod Suppression:"):r_text("%.2f", {data = {base_and_mod}})
@@ -1616,3 +1687,26 @@ InventoryStatsPopup._armors_movement = InventoryStatsPopup._armors_armor
 InventoryStatsPopup._armors_dodge = InventoryStatsPopup._armors_armor
 InventoryStatsPopup._armors_damage_shake = InventoryStatsPopup._armors_armor
 InventoryStatsPopup._armors_stamina = InventoryStatsPopup._armors_armor
+
+
+
+function InventoryStatsPopup:_mods_magazine()
+	local index_stats = {}
+	for _, stat in pairs(self._data.stat_table) do index_stats[stat.name] = self._data.stats and self._data.stats[stat.name] or 0 end
+	self:row():l_text("Index Values:")
+	for _, stat in pairs(self._data.stat_table) do
+		if stat.name == "fire_rate" or stat.name == "magazine" then
+			self:row({ s = 0.9 }):l_text("\t" .. utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name))):r_text("%s", {data = {"N/A"}})
+		else
+			self:row({ s = 0.9 }):l_text("\t" .. utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name))):r_text("%d", {data = {index_stats[stat.name]}})
+		end
+	end
+end
+
+InventoryStatsPopup._mods_totalammo = InventoryStatsPopup._mods_magazine
+InventoryStatsPopup._mods_damage = InventoryStatsPopup._mods_magazine
+InventoryStatsPopup._mods_fire_rate = InventoryStatsPopup._mods_magazine
+InventoryStatsPopup._mods_spread = InventoryStatsPopup._mods_magazine
+InventoryStatsPopup._mods_recoil = InventoryStatsPopup._mods_magazine
+InventoryStatsPopup._mods_concealment = InventoryStatsPopup._mods_magazine
+InventoryStatsPopup._mods_suppression = InventoryStatsPopup._mods_magazine
