@@ -987,6 +987,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 			end
 		end
 		local name = equipped and equipped_mod or selected_mod
+		if not name then return nil end
 		local localized_name
 		if equipped_mod then
 			for _, mod in ipairs(tweak_data.weapon.factory[managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)].default_blueprint) do
