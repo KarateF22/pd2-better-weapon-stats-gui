@@ -912,18 +912,17 @@ function BlackMarketGui:_get_popup_data(equipped)
 		local name = equipped and weapon.weapon_id or weapon and weapon.weapon_id or self._slot_data.name
 		local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
 		local blueprint = managers.blackmarket:get_weapon_blueprint(category, slot)
+		local ammo_data = factory_id and blueprint and managers.weapon_factory:get_ammo_data_from_weapon(factory_id, blueprint) or {}
 		local custom_stats = factory_id and blueprint and managers.weapon_factory:get_custom_stats_from_weapon(factory_id, blueprint)
-		local ammo_data = {}
 		if custom_stats then
-			for _, stats in pairs(custom_stats) do
-				if stats.ammo_pickup_min_mul then
-					ammo_data.ammo_pickup_min_mul = stats.ammo_pickup_min_mul
-				end
-				if stats.ammo_pickup_max_mul then
-					ammo_data.ammo_pickup_max_mul = stats.ammo_pickup_max_mul
-				end
-				if stats.can_shoot_through_shield then
-					ammo_data.can_shoot_through_shield = stats.can_shoot_through_shield
+			for part_id, stats in pairs(custom_stats) do
+				if tweak_data.weapon.factory.parts[part_id].type ~= "ammo" then
+					if stats.ammo_pickup_min_mul then
+						ammo_data.ammo_pickup_min_mul = ammo_data.ammo_pickup_min_mul and ammo_data.ammo_pickup_min_mul * stats.ammo_pickup_min_mul or stats.ammo_pickup_min_mul
+					end
+					if stats.ammo_pickup_max_mul then
+						ammo_data.ammo_pickup_max_mul = ammo_data.ammo_pickup_max_mul and ammo_data.ammo_pickup_max_mul * stats.ammo_pickup_max_mul or stats.ammo_pickup_max_mul
+					end
 				end
 			end
 		end
@@ -944,11 +943,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 			blueprint = blueprint,
 			ammo_data = ammo_data,
 			silencer = factory_id and blueprint and managers.weapon_factory:has_perk("silencer", factory_id, blueprint),
-			weapon_modified = factory_id and blueprint and managers.blackmarket:is_weapon_modified(factory_id, blueprint),
-			stats = {
-				base = tweak_data.weapon[name].stats,
-				mod = factory_id and blueprint and managers.weapon_factory:get_stats(factory_id, blueprint) or {},
-			},
+			--weapon_modified = factory_id and blueprint and managers.blackmarket:is_weapon_modified(factory_id, blueprint),
 		}
 		if data.tweak.category == "saw" then return nil end
 	elseif tweak_data.blackmarket.armors[self._slot_data.name] then
@@ -992,15 +987,17 @@ function BlackMarketGui:_get_popup_data(equipped)
 		local name = equipped and equipped_mod or selected_mod
 		if not name then return nil end
 		local localized_name
-		if equipped_mod then
-			for _, mod in ipairs(tweak_data.weapon.factory[managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)].default_blueprint) do
-				if equipped_mod == tweak_data.weapon.factory.parts[mod] and equipped then
-					localized_name = "Default Part"
-					break
+		if equipped then
+			if equipped_mod then
+				for _, mod in ipairs(tweak_data.weapon.factory[managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)].default_blueprint) do
+					if equipped_mod == tweak_data.weapon.factory.parts[mod] then
+						localized_name = "Default Part"
+						break
+					end
 				end
+			else
+				localized_name = "No Part"
 			end
-		elseif equipped then
-			localized_name = "No Part"
 		end
 		data = {
 			inventory_category = "mods",
@@ -1008,7 +1005,8 @@ function BlackMarketGui:_get_popup_data(equipped)
 			stat_table = self._stats_shown,
 			name = name,
 			localized_name = localized_name or managers.localization:text(name.name_id),
-			stats = equipped and not equipped_mod and {} or name.stats
+			stats = equipped and not equipped_mod and {} or name.stats,
+			type = name.type
 		}
 	end
 	
@@ -1371,9 +1369,10 @@ function InventoryStatsPopup:_primaries_damage()
 	local damage_mod = self._data.mods_stats.damage.value / 10
 	local damage_skill = self._data.skill_stats.damage.value / 10
 	local damage_total = damage_base + damage_mod + damage_skill
-	local cannot_headshot = self._data.category == "grenade_launcher" or (self._data.ammo_data and self._data.ammo_data.bullet_class == "InstantExplosiveBulletBase")
-	local pierces_shields = self._data.tweak.can_shoot_through_shield or (self._data.ammo_data and self._data.ammo_data.can_shoot_through_shield)
-
+	local ammo_data = self._data.ammo_data
+	local pierces_shields = self._data.tweak.can_shoot_through_shield or (ammo_data and ammo_data.can_shoot_through_shield)
+	local explosive = ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher"
+	
 	self:row():l_text("Index Values:")
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats.damage.index}})
 	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats.damage.index}})
@@ -1382,74 +1381,100 @@ function InventoryStatsPopup:_primaries_damage()
 	--if self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers.damage then self:row():l_text("Innate Damage Multiplier:"):r_text("%0.2f", {data = {self._data.tweak.stats_modifiers.damage}}) end
 	self:row({ h = 15 })
 	
-	local difficulties = {
-		{ id = "ok", name = "OK" },
-		{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
-	}
-	local enemies = {
-		{ id = "fbi_swat", name = "FBI Swat (Green)", difficulty_override = { dw = { hp = tweak_data.character.fbi_swat.HEALTH_INIT, hs = tweak_data.character.fbi_swat.headshot_dmg_mul }}},
-		{ id = "fbi_heavy_swat", name = "FBI Heavy Swat (Tan)"},
-		{ id = "city_swat", name = "Murky / GenSec Elite (Gray)", difficulty_override = { dw = { hp = 24, hs = tweak_data.character.fbi_swat.HEALTH_INIT / 8 }}},
-		{ id = "taser", name = "Taser", is_special = true },
-		{ id = "shield", name = pierces_shields and "Shield (Piercing)" or "Shield", is_special = true , damage_mul = pierces_shields and .25 or 1 },
-		{ id = "spooc", name = "Cloaker", is_special = true  },
-	}
+	if explosive then
+		if self._data.name == "gre_m79" then self:row():l_text("Blast Radius:"):r_text("3.5m") end
+		if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("5m") end
+	else
+		local difficulties = {
+			{ id = "ok", name = "OK" },
+			{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
+		}
+		local enemies = {
+			{ id = "fbi_swat", name = "FBI Swat (Green)", difficulty_override = { dw = { hp = tweak_data.character.fbi_swat.HEALTH_INIT, hs = tweak_data.character.fbi_swat.headshot_dmg_mul }}},
+			{ id = "fbi_heavy_swat", name = "FBI Heavy Swat (Tan)"},
+			{ id = "city_swat", name = "Murky / GenSec Elite (Gray)", difficulty_override = { dw = { hp = 24, hs = tweak_data.character.fbi_swat.HEALTH_INIT / 8 }}},
+			{ id = "taser", name = "Taser", is_special = true },
+			{ id = "shield", name = pierces_shields and "Shield (Piercing)" or "Shield", is_special = true , damage_mul = pierces_shields and .25 or 1 },
+			{ id = "spooc", name = "Cloaker", is_special = true  },
+		}
 
-	local hs_mult = managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
-	local special_mult = managers.player:upgrade_value("weapon", "special_damage_taken_multiplier", 1)
-	
-	self:row():l_text("Headshots to kill:"):r_text("(OK / DW)")
-	for _, data in ipairs(enemies) do
-		local row = self:row({ s = 0.9 }):l_text("\t\t" .. data.name .. ":")
-		for i, diff in ipairs(difficulties) do
-			local hp = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hp or (tweak_data.character[data.id].HEALTH_INIT * (diff.hp or 1))
-			local hs = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hs or (tweak_data.character[data.id].headshot_dmg_mul * (diff.hs or 1))
-			local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult
-			local adjusted_damage = math.ceil(math.max(raw_damage / (hp/512), 1)) * (hp/512)
-			row:r_text("%2d (%.2f)", { no_trim = true, data = { math.ceil(hp / adjusted_damage), hp / adjusted_damage }})
-			if i ~= #difficulties then
-				row:r_text("/")
+		local hs_mult = managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
+		local special_mult = managers.player:upgrade_value("weapon", "special_damage_taken_multiplier", 1)
+		
+		self:row():l_text("Headshots to kill:"):r_text("(OK / DW)")
+		for _, data in ipairs(enemies) do
+			local row = self:row({ s = 0.9 }):l_text("\t\t" .. data.name .. ":")
+			for i, diff in ipairs(difficulties) do
+				local hp = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hp or (tweak_data.character[data.id].HEALTH_INIT * (diff.hp or 1))
+				local hs = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hs or (tweak_data.character[data.id].headshot_dmg_mul * (diff.hs or 1))
+				local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult
+				local adjusted_damage = math.ceil(math.max(raw_damage / (hp/512), 1)) * (hp/512)
+				row:r_text("%2d (%.2f)", { no_trim = true, data = { math.ceil(hp / adjusted_damage), hp / adjusted_damage }})
+				if i ~= #difficulties then
+					row:r_text("/")
+				end
 			end
+		end
+
+		--Dozer special case
+		for i, diff in ipairs(difficulties) do
+			local hp = tweak_data.character.tank.HEALTH_INIT * (diff.hp or 1)
+			local hs = tweak_data.character.tank.headshot_dmg_mul * (diff.hs or 1)
+			local adjusted_body_damage = math.ceil(math.max(damage_total * special_mult / (hp/512), 1)) * (hp/512)
+			local adjusted_hs_damage = math.ceil(math.max(damage_total * special_mult * hs * hs_mult / (hp/512), 1)) * (hp/512)
+			local adjusted_armor_damage = math.ceil(damage_total * special_mult * 16.384) / 16.384
+			local total_bullets = 0
+			
+			local is_dead
+			local str = "%2d ("
+			local str_data = {}
+			for i, armor_hp in ipairs({ 15, 16 }) do
+				if not is_dead then
+					local tmp_hp = armor_hp
+					
+					while hp > 0 and tmp_hp > 0 do
+						hp = hp - adjusted_body_damage
+						tmp_hp = tmp_hp - adjusted_armor_damage
+						total_bullets = total_bullets + 1
+					end
+					
+					is_dead = hp <= 0
+					str = str .. "%.2f" .. (is_dead and "" or " + ")
+					table.insert(str_data, armor_hp / adjusted_armor_damage)
+				end
+			end
+			
+			if not is_dead then
+				local bullets = hp / adjusted_hs_damage
+				total_bullets = total_bullets + math.ceil(bullets)
+				str = str .. "%.2f"
+				table.insert(str_data, bullets)
+			end
+			table.insert(str_data, 1, total_bullets)
+			
+			self:row({ s = 0.9 }):l_text("\t\tBulldozer (" .. diff.name .. "):"):r_text(str .. ")", { no_trim = true, data = str_data })
 		end
 	end
+	
+	if self._data.category ~= "shotgun" then
+		return
+	else
+		if not explosive then self:row({ h = 15 }) end
+	end
+	
+	local near = self._data.tweak.damage_near / 100
+	local far = self._data.tweak.damage_far / 100
+	local near_mul = ammo_data and ammo_data.damage_near_mul or 1
+	local far_mul = ammo_data and ammo_data.damage_far_mul or 1
 
-	--Dozer special case
-	for i, diff in ipairs(difficulties) do
-		local hp = tweak_data.character.tank.HEALTH_INIT * (diff.hp or 1)
-		local hs = tweak_data.character.tank.headshot_dmg_mul * (diff.hs or 1)
-		local adjusted_body_damage = math.ceil(math.max(damage_total * special_mult / (hp/512), 1)) * (hp/512)
-		local adjusted_hs_damage = math.ceil(math.max(damage_total * special_mult * hs * hs_mult / (hp/512), 1)) * (hp/512)
-		local adjusted_armor_damage = math.ceil(damage_total * special_mult * 16.384) / 16.384
-		local total_bullets = 0
-		
-		local is_dead
-		local str = "%2d ("
-		local str_data = {}
-		for i, armor_hp in ipairs({ 15, 16 }) do
-			if not is_dead then
-				local tmp_hp = armor_hp
-				
-				while hp > 0 and tmp_hp > 0 do
-					hp = hp - adjusted_body_damage
-					tmp_hp = tmp_hp - adjusted_armor_damage
-					total_bullets = total_bullets + 1
-				end
-				
-				is_dead = hp <= 0
-				str = str .. "%.2f" .. (is_dead and "" or " + ")
-				table.insert(str_data, armor_hp / adjusted_armor_damage)
-			end
-		end
-		
-		if not is_dead then
-			local bullets = hp / adjusted_hs_damage
-			total_bullets = total_bullets + math.ceil(bullets)
-			str = str .. "%.2f"
-			table.insert(str_data, bullets)
-		end
-		table.insert(str_data, 1, total_bullets)
-		
-		self:row({ s = 0.9 }):l_text("\t\tBulldozer (" .. diff.name .. "):"):r_text(str .. ")", { no_trim = true, data = str_data })
+	self:row():l_text("Shotgun Stats:")
+	self:row({ s = 0.9 }):l_text("\tPellets:"):r_text("%d", {data = {ammo_data and ammo_data.rays or self._data.tweak.rays}})
+	if explosive then
+		self:row({ s = 0.9 }):l_text("\tBlast Radius:"):r_text("%dm", {data = {2}})
+	end
+	self:row({ s = 0.9 }):l_text("\tBase Falloff Range:"):r_text("%.1fm to %.1fm", {data = {near, near + far}})
+	if near_mul ~= 1 or far_mul ~= 1 then
+		self:row({ s = 0.9 }):l_text("\tTotal Falloff Range:"):r_text("%.1fm to %.1fm", {data = {near * near_mul, near * near_mul + far * far_mul}})
 	end
 end
 
@@ -1485,6 +1510,13 @@ function InventoryStatsPopup:_primaries_spread()
 	self:row({ s = 0.9 }):l_text("\tStanding-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_standing, DR(spread.moving_standing)}})
 	self:row({ s = 0.9 }):l_text("\tCrouching:"):r_text("%.2f (%.2f)", {data = {spread.crouching, DR(spread.crouching)}})
 	self:row({ s = 0.9 }):l_text("\tCrouching-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_crouching, DR(spread.moving_crouching)}})
+	-- self:row({ h = 15 })
+	
+	-- self:row():l_text("Zoom Index Values:")
+	-- self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats.zoom.index}})
+	-- self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats.zoom.index}})
+	-- local bounded_total_zoom = math.clamp(self._data.base_stats.zoom.index + self._data.mods_stats.zoom.index, 1, #tweak_data.weapon.stats.zoom)
+	-- self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total_zoom}})
 end
 
 
@@ -1517,26 +1549,17 @@ end
 
 
 function InventoryStatsPopup:_primaries_concealment()
-	if self._data.name == "gre_m79" then self:row():l_text("Blast Radius:"):r_text("%.1fm", {data = {3.5}}) end
-	if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("%dm", {data = {5}}) end
-	if self._data.category ~= "shotgun" then return end
+	if managers.blackmarket:equipped_weapon_slot(self._data.inventory_category) ~= self._data.inventory_slot then return end
+	local conceal_crit_bonus = managers.player:critical_hit_chance() * 100
+	local detection_time_multiplier = managers.blackmarket:get_suspicion_of_local_player()
+	local detection_distance_multiplier = 1 / math.sqrt(detection_time_multiplier)
 	
-	local ammo_data = self._data.ammo_data
-	local near = self._data.tweak.damage_near / 100
-	local far = self._data.tweak.damage_far / 100
-	local near_mul = ammo_data and ammo_data.damage_near_mul or 1
-	local far_mul = ammo_data and ammo_data.damage_far_mul or 1
-
-	if ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" then self:row():l_text("Blast Radius:"):r_text("%dm", {data = {2}}) end
-	self:row():l_text("Shotgun Pellets:"):r_text("%d", {data = {ammo_data and ammo_data.rays or self._data.tweak.rays}})
+	self:row():l_text("Critical Hit Chance:"):r_text("%.0f%%", {data = {conceal_crit_bonus}})
 	self:row({ h = 15 })
-	self:row():l_text("Base Falloff Starts:"):r_text("%.2fm", {data = {near}})
-	self:row():l_text("Base Falloff Ends:"):r_text("%.2fm", {data = {near + far}})
-	if near_mul ~= 1 or far_mul ~= 1 then
-		self:row({ h = 15 })
-		self:row():l_text("Total Falloff Starts:"):r_text("%.2fm", {data = {near * near_mul}})
-		self:row():l_text("Total Falloff Ends:"):r_text("%.2fm", {data = {near * near_mul + far * far_mul}})
-	end
+	self:row():l_text("Concealment Detection Stats:")
+	self:row({ s = 0.9 }):l_text("\tTime Multiplier:"):r_text("%.2f", {data = {detection_time_multiplier}})
+	self:row({ s = 0.9 }):l_text("\tDistance Multiplier:"):r_text("%.2f", {data = {detection_distance_multiplier}})
+	
 end
 
 
@@ -1644,6 +1667,8 @@ function InventoryStatsPopup:_mods_magazine()
 	local index_stats = {}
 	for _, stat in pairs(self._data.stat_table) do index_stats[stat.name] = self._data.stats and self._data.stats[stat.name] or 0 end
 	self:row():l_text("Index Values:")
+	
+	if self._data.type == "sight" then self:row({ s = 0.9 }):l_text("\tZOOM"):r_text("%d", {data = {self._data.stats.zoom or 0}}) end
 	for _, stat in pairs(self._data.stat_table) do
 		if stat.name == "fire_rate" or stat.name == "magazine" then
 			self:row({ s = 0.9 }):l_text("\t" .. utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name))):r_text("N/A")
