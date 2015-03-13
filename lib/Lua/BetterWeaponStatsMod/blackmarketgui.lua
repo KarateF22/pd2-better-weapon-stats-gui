@@ -1614,14 +1614,14 @@ function InventoryStatsPopup:_melee_weapons_damage()
 	if not melee.instant then self:row():l_text("Unequip Delay:"):r_text("%.2fs", {data = {melee.expire_t}}) end
 	self:row({ h = 15 })
 	if melee.instant then
-		self:row():l_text("DPS:"):r_text("%.2fs", {data = {uncharged_damage / melee.repeat_expire_t}})
-		self:row():l_text("KdPS:"):r_text("%.2fs", {data = {uncharged_kd / melee.repeat_expire_t}})
+		self:row():l_text("DPS:"):r_text("%.2f", {data = {uncharged_damage / melee.repeat_expire_t}})
+		self:row():l_text("KdPS:"):r_text("%.2f", {data = {uncharged_kd / melee.repeat_expire_t}})
 	else
-		self:row():l_text("Uncharged DPS:"):r_text("%.2fs", {data = {uncharged_damage / melee.repeat_expire_t}})
-		self:row():l_text("Charged DPS:"):r_text("%.2fs", {data = {charged_damage / (melee.repeat_expire_t + charge_time)}})
+		self:row():l_text("Uncharged DPS:"):r_text("%.2f", {data = {uncharged_damage / melee.repeat_expire_t}})
+		self:row():l_text("Charged DPS:"):r_text("%.2f", {data = {charged_damage / (melee.repeat_expire_t + charge_time)}})
 		self:row({ h = 15 })
-		self:row():l_text("Uncharged KdPS:"):r_text("%.2fs", {data = {uncharged_kd / melee.repeat_expire_t}})
-		self:row():l_text("Charged KdPS:"):r_text("%.2fs", {data = {charged_kd / (melee.repeat_expire_t + charge_time)}})
+		self:row():l_text("Uncharged KdPS:"):r_text("%.2f", {data = {uncharged_kd / melee.repeat_expire_t}})
+		self:row():l_text("Charged KdPS:"):r_text("%.2f", {data = {charged_kd / (melee.repeat_expire_t + charge_time)}})
 	end
 end
 
@@ -1636,7 +1636,8 @@ function InventoryStatsPopup:_armors_armor()
 	local armor_tweak = tweak_data.blackmarket.armors[self._data.name]
 	local player_tweak = tweak_data.player
 	local health = player_tweak.damage.HEALTH_INIT * 10
-	local health_mul = 1 + managers.player:upgrade_value("player", "health_multiplier", 1) + managers.player:upgrade_value("player", "passive_health_multiplier", 1) + managers.player:team_upgrade_value("health", "passive_multiplier", 1) - 3
+	local health_mul = managers.player:health_skill_multiplier()
+	local regen_time = player_tweak.damage.REGENERATE_TIME * managers.player:body_armor_regen_multiplier(false)
 	local speed = player_tweak.movement_state.standard.movement.speed
 	local armor_mul = managers.player:mod_movement_penalty(managers.player:body_armor_value("movement", armor_tweak.upgrade_level, 1))
 	local walking_mul = armor_mul + managers.player:upgrade_value("player", "walk_speed_multiplier", 1) + managers.player:upgrade_value("player", "movement_speed_multiplier", 1) - 2
@@ -1644,6 +1645,8 @@ function InventoryStatsPopup:_armors_armor()
 	local steelsight_mul = armor_mul + managers.player:upgrade_value("player", "steelsight_speed_multiplier", 1) + managers.player:upgrade_value("player", "movement_speed_multiplier", 1) - 2
 	local crouch_mul = armor_mul + managers.player:upgrade_value("player", "crouch_speed_multiplier", 1) + managers.player:upgrade_value("player", "movement_speed_multiplier", 1) - 2
 	
+	self:row():l_text("Regeneration Delay: "):r_text("%.1fs", {data = {regen_time}})
+	self:row({ h = 15 })
 	self:row():l_text("Player Health:")
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.1f", {data = {health}})
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.1f", {data = {health * health_mul}})
@@ -1666,8 +1669,8 @@ InventoryStatsPopup._armors_stamina = InventoryStatsPopup._armors_armor
 function InventoryStatsPopup:_mods_magazine()
 	local index_stats = {}
 	for _, stat in pairs(self._data.stat_table) do index_stats[stat.name] = self._data.stats and self._data.stats[stat.name] or 0 end
-	self:row():l_text("Index Values:")
 	
+	self:row():l_text("Index Values:")
 	if self._data.type == "sight" then self:row({ s = 0.9 }):l_text("\tZOOM"):r_text("%d", {data = {self._data.stats.zoom or 0}}) end
 	for _, stat in pairs(self._data.stat_table) do
 		if stat.name == "fire_rate" or stat.name == "magazine" then
