@@ -12,6 +12,15 @@ local _blackmarketgui_function_ptr9 = BlackMarketGui.update_info_text
 
 
 
+function BlackMarketGui:mouse_moved(o, x, y, ...)
+	if toggle_greater_precision and self._enabled and not self._renaming_item then
+		self:_check_popup(x, y)
+	end
+	return _blackmarketgui_function_ptr1(self, o, x, y, ...)
+end
+
+
+
 function BlackMarketGui:_get_base_stats(name)
 	if not toggle_greater_precision then return _blackmarketgui_function_ptr2(self, name) end
 	
@@ -36,10 +45,14 @@ function BlackMarketGui:_get_base_stats(name)
 			base_stats[stat.name].index = tweak_data.weapon[name].stats[stat.name]
 			base_stats[stat.name].value = stat.index and index or tweak_stats[stat.name][index] * tweak_data.gui.stats_present_multiplier
 			local offset = math.min(tweak_stats[stat.name][1], tweak_stats[stat.name][#tweak_stats[stat.name]]) * tweak_data.gui.stats_present_multiplier
-			if stat.offset then base_stats[stat.name].value = base_stats[stat.name].value - offset end
+			if stat.offset then
+				base_stats[stat.name].value = base_stats[stat.name].value - offset
+			end
 			if stat.revert then
 				local max_stat = math.max(tweak_stats[stat.name][1], tweak_stats[stat.name][#tweak_stats[stat.name]]) * tweak_data.gui.stats_present_multiplier
-				if stat.revert then max_stat = max_stat - offset end
+				if stat.revert then
+					max_stat = max_stat - offset
+				end
 				base_stats[stat.name].value = max_stat - base_stats[stat.name].value
 			end
 			if modifier_stats and modifier_stats[stat.name] and stat.name == "damage" then
@@ -48,9 +61,13 @@ function BlackMarketGui:_get_base_stats(name)
 					local real_base_value = tweak_stats[stat.name][index]
 					local modded_value = real_base_value * mod
 					local offset = math.min(tweak_stats[stat.name][1], tweak_stats[stat.name][#tweak_stats[stat.name]])
-					if stat.offset then modded_value = modded_value - offset end
+					if stat.offset then
+						modded_value = modded_value - offset
+					end
 					local max_stat = math.max(tweak_stats[stat.name][1], tweak_stats[stat.name][#tweak_stats[stat.name]])
-					if stat.revert then max_stat = max_stat - offset end
+					if stat.revert then
+						max_stat = max_stat - offset
+					end
 					local new_value = (max_stat - modded_value) * tweak_data.gui.stats_present_multiplier
 					if mod ~= 0 and (modded_value > tweak_stats[stat.name][1] or modded_value < tweak_stats[stat.name][#tweak_stats[stat.name]]) then
 						new_value = (new_value + base_stats[stat.name].value / mod) / 2
@@ -107,22 +124,21 @@ function BlackMarketGui:_get_skill_stats(name, category, slot, base_stats, mods_
 					multiplier = managers.blackmarket:accuracy_multiplier(name, weapon_tweak.category, silencer, nil, fire_mode, blueprint)
 				elseif stat.name == "recoil" then
 					multiplier = managers.blackmarket:recoil_multiplier(name, weapon_tweak.category, silencer, blueprint)
-					--modifier = -managers.blackmarket:recoil_addend(name, weapon_tweak.category, silencer, blueprint) * tweak_data.gui.stats_present_multiplier
-					modifier = 0 --recoil_addend currently always returns 0 anyways, so this prevents future breakage
+					modifier = -managers.blackmarket:recoil_addend(name, weapon_tweak.category, silencer, blueprint) * tweak_data.gui.stats_present_multiplier
 				elseif stat.name == "suppression" then
 					multiplier = managers.blackmarket:threat_multiplier(name, weapon_tweak.category, silencer)
 				elseif stat.name == "concealment" then
 				elseif stat.name == "fire_rate" then
 					multiplier = managers.blackmarket:fire_rate_multiplier(name, weapon_tweak.category, silencer, detection_risk, nil, blueprint)
 				end
-				
-				if stat.revert then multiplier = 1 / math.max(multiplier, 0.01) end
-				
+				if stat.revert then
+					multiplier = 1 / math.max(multiplier, 0.01)
+				end
 				skill_stats[stat.name].skill_in_effect = multiplier ~= 1 or modifier ~= 0
 				if stat.name == "spread" then
 					skill_stats[stat.name].value = multiplier - 1
 				elseif stat.name == "recoil" then
-					skill_stats[stat.name].value = 30 - (((30 - base_value) / 10) / multiplier) * 10 - base_value			
+					skill_stats[stat.name].value = 30 - (((30 - base_value) / 10) / multiplier) * 10 - base_value
 				else
 					skill_stats[stat.name].value = modifier + base_value * multiplier - base_value
 				end
@@ -270,41 +286,19 @@ function BlackMarketGui:show_stats()
 			})
 		end
 
-		for i, stat in ipairs(self._stats_shown) do
-						
-			value = base_stats[stat.name].value + mods_stats[stat.name].value + skill_stats[stat.name].value
-			
+		for _, stat in ipairs(self._stats_shown) do
+			self._stats_texts[stat.name].name:set_text(utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name)))			
+			value = base_stats[stat.name].value + mods_stats[stat.name].value + (stat.name ~= "spread" and skill_stats[stat.name].value or 0)
+			local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate") and "%0.0f" or "%0.2f"
 			if slot == equipped_slot then
-				self._stats_texts[stat.name].name:set_text(utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name)))
-				
+				if value > 9999 then decimals = "%0.1f" end
 				local base = base_stats[stat.name].value
 				self._stats_texts[stat.name].equip:set_alpha(1)
-				local value2, based, mod, skill
-				if stat.name == "spread" then
-					local ads_spread_mul = tweak_data.weapon[name].spread.steelsight
-					if ads_spread_mul < 1 then ads_spread_mul = 1 / (2 - ads_spread_mul) end
-					ads_spread_mul = 1
-					based = 20 - ((20 - base) * ads_spread_mul)
-					mod = 20 - (20 - base - mods_stats[stat.name].value) * ads_spread_mul - based
-					skill = 0
-					value2 = based + mod
-				else
-					value2 = value
-					based = base
-					mod = mods_stats[stat.name].value
-					skill = skill_stats[stat.name].value
-				end
-				
-				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate") and "%0.0f" or "%0.2f"
-				if stat.name == "damage" and (value2 > 9999 or based > 9999 or mod > 9999) then decimals = "%0.1f" end
-				
-				self._stats_texts[stat.name].equip:set_text(string.format(decimals, value2) or "")
-				self._stats_texts[stat.name].base:set_text(string.format(decimals, based) or "")
-				self._stats_texts[stat.name].mods:set_text((mods_stats[stat.name].value == 0 and "") or (mods_stats[stat.name].value > 0 and "+" or "") .. string.format(decimals, mod) or "")
-				if stat.name == "spread" then self._stats_texts[stat.name].skill:set_text("")
-				else self._stats_texts[stat.name].skill:set_text(skill_stats[stat.name].skill_in_effect and ((skill_stats[stat.name].value > 0 and "+" or "") .. string.format(decimals, skill)) or "")
-				end
-				
+				self._stats_texts[stat.name].equip:set_text(string.format(decimals, value) or "")
+				self._stats_texts[stat.name].base:set_text(string.format(decimals, base) or "")
+				self._stats_texts[stat.name].mods:set_text((0 < mods_stats[stat.name].value and "+" or "") .. string.format(decimals, mods_stats[stat.name].value) or "")
+				self._stats_texts[stat.name].skill:set_text(skill_stats[stat.name].skill_in_effect and ((0 < skill_stats[stat.name].value and "+" or "") .. string.format(decimals, stat.name ~= "spread" and skill_stats[stat.name].value or 0)) or "")
+				if stat.name == "spread" then self._stats_texts[stat.name].skill:set_text("") end
 				self._stats_texts[stat.name].total:set_text("")
 				if value > base then
 					self._stats_texts[stat.name].equip:set_color(tweak_data.screen_colors.stats_positive)
@@ -313,26 +307,18 @@ function BlackMarketGui:show_stats()
 				else
 					self._stats_texts[stat.name].equip:set_color(tweak_data.screen_colors.text)
 				end
-
 				self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.text)
 			else
-				
-				self._stats_texts[stat.name].name:set_text(utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name)))
-			
-				local equip = equip_base_stats[stat.name].value + equip_mods_stats[stat.name].value + equip_skill_stats[stat.name].value
+				local equip = equip_base_stats[stat.name].value + equip_mods_stats[stat.name].value + (stat.name ~= "spread" and equip_skill_stats[stat.name].value or 0)
 				self._stats_texts[stat.name].equip:set_alpha(0.75)
-				local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate") and "%0.0f" or "%0.2f"
-				local equip2 = equip - (stat.name == "spread" and equip_skill_stats[stat.name].value or 0)
-				local value2 = value - (stat.name == "spread" and skill_stats[stat.name].value or 0)
-				if stat.name == "damage" and (equip2 > 9999 or value2 > 9999) then decimals = "%0.1f" end
-				self._stats_texts[stat.name].equip:set_text(string.format(decimals, equip2))
+				self._stats_texts[stat.name].equip:set_text(string.format(equip > 9999 and "%.1f" or decimals, equip))
 				self._stats_texts[stat.name].base:set_text("")
 				self._stats_texts[stat.name].mods:set_text("")
 				self._stats_texts[stat.name].skill:set_text("")
-				self._stats_texts[stat.name].total:set_text(string.format(decimals, value2))
-				if value2 > equip2 then
+				self._stats_texts[stat.name].total:set_text(string.format(value > 9999 and "%.1f" or decimals, value))
+				if value > equip then
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.stats_positive)
-				elseif value2 < equip2 then
+				elseif value < equip then
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.stats_negative)
 				else
 					self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.text)
@@ -355,8 +341,9 @@ function BlackMarketGui:show_stats()
 			x = 245
 		}, {name = "skill", alpha = 0})
 		if self._slot_data.name ~= equipped_slot then
-			for _, title in pairs(self._stats_titles) do title:hide() end
-			
+			for _, title in pairs(self._stats_titles) do
+				title:hide()
+			end
 			self:set_stats_titles({name = "total", show = true}, {
 				name = "equip",
 				show = true,
@@ -365,8 +352,9 @@ function BlackMarketGui:show_stats()
 				x = 105
 			})
 		else
-			for _, title in pairs(self._stats_titles) do title:show() end
-
+			for title_name, title in pairs(self._stats_titles) do
+				title:show()
+			end
 			self:set_stats_titles({name = "total", hide = true}, {
 				name = "equip",
 				text_id = "bm_menu_stats_total",
@@ -374,8 +362,7 @@ function BlackMarketGui:show_stats()
 				x = 120
 			})
 		end
-
-		for i, stat in ipairs(self._armor_stats_shown) do
+		for _, stat in ipairs(self._armor_stats_shown) do
 			self._armor_stats_texts[stat.name].name:set_text(utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name)))
 			value = base_stats[stat.name].value + mods_stats[stat.name].value + skill_stats[stat.name].value
 			if self._slot_data.name == equipped_slot then
@@ -383,7 +370,6 @@ function BlackMarketGui:show_stats()
 				self._armor_stats_texts[stat.name].equip:set_alpha(1)
 				self._armor_stats_texts[stat.name].equip:set_text(value)
 				self._armor_stats_texts[stat.name].base:set_text(base)
-
 				self._armor_stats_texts[stat.name].skill:set_text((0 < skill_stats[stat.name].value and "+" or "") .. skill_stats[stat.name].value or "")
 				self._armor_stats_texts[stat.name].total:set_text("")
 				self._armor_stats_texts[stat.name].equip:set_color(tweak_data.screen_colors.text)
@@ -394,7 +380,6 @@ function BlackMarketGui:show_stats()
 				else
 					self._armor_stats_texts[stat.name].equip:set_color(tweak_data.screen_colors.text)
 				end
-
 				self._armor_stats_texts[stat.name].total:set_color(tweak_data.screen_colors.text)
 			else
 				local equip = equip_base_stats[stat.name].value + equip_mods_stats[stat.name].value + equip_skill_stats[stat.name].value
@@ -410,12 +395,9 @@ function BlackMarketGui:show_stats()
 				else
 					self._armor_stats_texts[stat.name].total:set_color(tweak_data.screen_colors.text)
 				end
-
 				self._armor_stats_texts[stat.name].equip:set_color(tweak_data.screen_colors.text)
 			end
-
 		end
-
 	elseif tweak_data.blackmarket.melee_weapons[self._slot_data.name] then
 		self:hide_armor_stats()
 		self:hide_weapon_stats()
@@ -645,7 +627,9 @@ function BlackMarketGui:show_stats()
 		self._rweapon_stats_panel:show()
 		self:hide_armor_stats()
 		self:hide_melee_weapon_stats()
-		for _, title in pairs(self._stats_titles) do title:hide() end
+		for _, title in pairs(self._stats_titles) do
+			title:hide()
+		end
 		if not mod_stats.equip.name then
 			self._stats_titles.equip:hide()
 		else
@@ -654,23 +638,26 @@ function BlackMarketGui:show_stats()
 			self._stats_titles.equip:set_alpha(0.75)
 			self._stats_titles.equip:set_x(105)
 		end
-
-		if not hide_equip then self._stats_titles.total:show() end
+		if not hide_equip then
+			self._stats_titles.total:show()
+		end
 		for i, stat in ipairs(self._stats_shown) do
 			self._stats_texts[stat.name].name:set_text(utf8.to_upper(managers.localization:text("bm_menu_" .. stat.name)))
 			value = mod_stats.chosen[stat.name]
 			equip = mod_stats.equip[stat.name]
 			stat_changed = tweak_parts and tweak_parts.stats[stat.stat_name or stat.name] and value ~= 0 and 1 or 0.5
-
-			for stat_name, stat_text in pairs(self._stats_texts[stat.name]) do if stat_name ~= "name" then stat_text:set_text("") end end
-			for name, column in pairs(self._stats_texts[stat.name]) do column:set_alpha(stat_changed) end
+			for stat_name, stat_text in pairs(self._stats_texts[stat.name]) do
+				if stat_name ~= "name" then
+					stat_text:set_text("")
+				end
+			end
+			for name, column in pairs(self._stats_texts[stat.name]) do
+				column:set_alpha(stat_changed)
+			end
 			
-			local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment") and "%0.0f" or "%0.2f"
-			local value2, equip2
-			value2 = value
-			equip2 = equip
-			self._stats_texts[stat.name].total:set_text(not hide_equip and stat_changed == 1 and (( value > 0 and "+" or "") .. string.format(decimals, value2) or ""))
-			self._stats_texts[stat.name].equip:set_text((equip == 0 and "") or (equip > 0 and "+" or "") .. string.format(decimals, equip2))
+			local decimals = (stat.name == "magazine" or stat.name == "totalammo" or stat.name == "concealment" or stat.name == "fire_rate") and "%0.0f" or "%0.2f"
+			self._stats_texts[stat.name].total:set_text(not hide_equip and stat_changed == 1 and (( value > 0 and "+" or "") .. string.format(decimals, value) or ""))
+			self._stats_texts[stat.name].equip:set_text((equip == 0 and "") or (equip > 0 and "+" or "") .. string.format(decimals, equip))
 			self._stats_texts[stat.name].equip:set_alpha(0.75)
 			if value > equip then
 				self._stats_texts[stat.name].total:set_color(tweak_data.screen_colors.stats_positive)
@@ -742,24 +729,24 @@ function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats,
 	local mod_stats = {}
 	mod_stats.chosen = {}
 	mod_stats.equip = {}
-	for _, stat in pairs( self._stats_shown ) do
+	for _, stat in pairs(self._stats_shown) do
 		mod_stats.chosen[stat.name] = 0
 		mod_stats.equip[stat.name] = 0
 	end
 	mod_stats.chosen.name = mod_name
 	if equipped_mods then
-		for _, mod in ipairs( equipped_mods ) do
+		for _, mod in ipairs(equipped_mods) do
 			if tweak_factory[mod] and tweak_factory[mod_name].type == tweak_factory[mod].type then
 				mod_stats.equip.name = mod
-			else --originally "break"
+			else
 			end
 		end
 	end
 	local curr_stats = base_stats
 	local index
-	for _, mod in pairs( mod_stats ) do
+	for _, mod in pairs(mod_stats) do
 		part_data = mod.name and managers.weapon_factory:get_part_data_by_part_id_from_weapon(mod.name, factory_id, default_blueprint) or nil
-		for _, stat in pairs( self._stats_shown ) do
+		for _, stat in pairs(self._stats_shown) do
 			if part_data and part_data.stats then
 				if stat.name == "magazine" then
 					local ammo = part_data.stats.extra_ammo
@@ -810,17 +797,6 @@ end
 
 
 
-function BlackMarketGui:mouse_moved(o, x, y, ...)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr1(self, o, x, y, ...) end
-	
-	if self._enabled and not self._renaming_item then
-		self:_check_popup(x, y)
-	end
-	return _blackmarketgui_function_ptr1(self, o, x, y, ...)
-end
-
-
-
 function BlackMarketGui:_pre_reload(...)
 	self:_delete_popups()
 	return _blackmarketgui_function_ptr8(self, ...)
@@ -829,9 +805,7 @@ end
 
 
 function BlackMarketGui:update_info_text(...)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr9(self, ...) end
-	
-	self:_check_update_info(self._slot_data, self._tabs[self._selected]._data)
+	if toggle_greater_precision then self:_check_update_info(self._slot_data, self._tabs[self._selected]._data) end
 	return _blackmarketgui_function_ptr9(self, ...)
 end
 
