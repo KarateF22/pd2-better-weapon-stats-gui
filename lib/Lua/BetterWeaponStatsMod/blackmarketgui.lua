@@ -138,7 +138,8 @@ function BlackMarketGui:_get_skill_stats(name, category, slot, base_stats, mods_
 				if stat.name == "spread" then
 					skill_stats[stat.name].value = multiplier - 1
 				elseif stat.name == "recoil" then
-					skill_stats[stat.name].value = 30 - (((30 - base_value) / 10) / multiplier) * 10 - base_value
+					local recoil_value = tweak_data.weapon.stats.recoil[math.clamp(base_stats[stat.name].index + mods_stats[stat.name].index, 1, #tweak_data.weapon.stats.recoil)]
+					skill_stats[stat.name].value = (tweak_data.weapon.stats.recoil[1] - recoil_value / multiplier) * tweak_data.gui.stats_present_multiplier - base_value
 				else
 					skill_stats[stat.name].value = modifier + base_value * multiplier - base_value
 				end
@@ -919,7 +920,6 @@ function BlackMarketGui:_get_popup_data(equipped)
 			silencer = factory_id and blueprint and managers.weapon_factory:has_perk("silencer", factory_id, blueprint),
 			--weapon_modified = factory_id and blueprint and managers.blackmarket:is_weapon_modified(factory_id, blueprint),
 		}
-		if data.tweak.category == "saw" then return nil end
 	elseif tweak_data.blackmarket.armors[self._slot_data.name] then
 		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
 		data = {
@@ -1281,6 +1281,9 @@ function InventoryStatsPopup:_primaries_magazine()
 			self:row({ s = 0.81 }):l_text("\t\tFull Reload:"):r_text("%.2fs", {data = {0.7 / reload_mul}})
 		end
 	end
+	
+	if self._data.tweak.category == "saw" then return end
+	
 	self:row({ h = 15 })
 	self:row():l_text("Time To Empty:"):r_text("%.2fs", {data = {mag * rof - rof}})
 end
@@ -1305,6 +1308,8 @@ function InventoryStatsPopup:_primaries_totalammo()
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.2f - %.2f", {data = {pickup[1], pickup[2]}})
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.2f - %.2f", {data = {pickup[1] * ammo_pickup_min_mul, pickup[2] * ammo_pickup_max_mul}})
 	
+	if self._data.tweak.category == "saw" then return end
+	
 	local damage = self._data.base_stats.damage.value + self._data.mods_stats.damage.value + self._data.skill_stats.damage.value
 	local totalammo = self._data.base_stats.totalammo.value + self._data.mods_stats.totalammo.value + self._data.skill_stats.totalammo.value
 	local mag = self._data.base_stats.magazine.value + self._data.mods_stats.magazine.value + self._data.skill_stats.magazine.value
@@ -1319,6 +1324,8 @@ end
 
 
 function InventoryStatsPopup:_primaries_fire_rate()
+	if self._data.tweak.category == "saw" then return end
+	
 	local akimbo_mul = self._data.category == "akimbo" and 2 or 1
 	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value) / akimbo_mul
 	local dmg = self._data.base_stats.damage.value + self._data.mods_stats.damage.value + self._data.skill_stats.damage.value
@@ -1339,6 +1346,8 @@ end
 
 
 function InventoryStatsPopup:_primaries_damage()
+	if self._data.tweak.category == "saw" then return end
+	
 	local damage_base = self._data.base_stats.damage.value / 10
 	local damage_mod = self._data.mods_stats.damage.value / 10
 	local damage_skill = self._data.skill_stats.damage.value / 10
@@ -1455,14 +1464,18 @@ end
 
 
 function InventoryStatsPopup:_primaries_spread()
-	local base_and_mod = (20 - (self._data.base_stats.spread.value + self._data.mods_stats.spread.value)) / 10
+	if self._data.tweak.category == "saw" then return end
+	
+	local base_and_mod = tweak_data.weapon.stats.spread[math.clamp(self._data.base_stats.spread.index + self._data.mods_stats.spread.index, 1, #tweak_data.weapon.stats.spread)]
 	local skill_value = self._data.skill_stats.spread.value
 	local global_spread_mul = self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers.spread or 1
 	local spread = self._data.tweak.spread
 	
 	local function DR(stance)
 		local stance_and_skill = stance - skill_value
-		if stance_and_skill >= 1 then return (stance_and_skill * global_spread_mul * base_and_mod) end
+		if stance_and_skill >= 1 then
+			return stance_and_skill * global_spread_mul * base_and_mod
+		end
 		return (1 / (2 - stance_and_skill) * global_spread_mul * base_and_mod)
 	end
 	
@@ -1496,8 +1509,8 @@ end
 
 
 function InventoryStatsPopup:_primaries_recoil()
-	local base_and_mod = (30 - (self._data.base_stats.recoil.value + self._data.mods_stats.recoil.value)) / 10
-	local skill = (30 - (self._data.base_stats.recoil.value + self._data.mods_stats.recoil.value + self._data.skill_stats.recoil.value)) / 10 / base_and_mod
+	local base_and_mod = tweak_data.weapon.stats.recoil[math.clamp(self._data.base_stats.recoil.index + self._data.mods_stats.recoil.index, 1, #tweak_data.weapon.stats.recoil)]
+	local skill = managers.blackmarket:recoil_multiplier(self._data.name, self._data.category, self._data.silencer, self._data.blueprint)
 	local kick = self._data.tweak.kick
 	local recoil_mul = base_and_mod * skill
 	
@@ -1523,11 +1536,28 @@ end
 
 
 function InventoryStatsPopup:_primaries_concealment()
+	local base_alert_index = self._data.tweak.stats and self._data.tweak.stats.alert_size
+	local mod_alert_index = self._data.factory_id and self._data.blueprint and managers.weapon_factory:get_stats(self._data.factory_id, self._data.blueprint)["alert_size"] or 0
+	local total_alert = tweak_data.weapon.stats.alert_size[math.clamp(base_alert_index + mod_alert_index, 1, #tweak_data.weapon.stats.alert_size)]
+	local sawing_alert = self._data.tweak.hit_alert_size_increase and tweak_data.weapon.stats.alert_size[math.clamp(base_alert_index + mod_alert_index - self._data.tweak.hit_alert_size_increase, 1, #tweak_data.weapon.stats.alert_size)]
+	
+	if sawing_alert then
+		self:row():l_text("Alert Radius:")
+		self:row({ s = 0.9 }):l_text("\tRegular:"):r_text("%.1fm", {data = {total_alert / 100}})
+		self:row({ s = 0.9 }):l_text("\tSawing:"):r_text("%.1fm", {data = {sawing_alert / 100}})
+	elseif self._data.ammo_data and self._data.ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher" then
+		self:row():l_text("Alert Radius (Explosion):"):r_text("%dm", {data = {100}})
+	else
+		self:row():l_text("Alert Radius:"):r_text("%.1fm", {data = {total_alert / 100}})
+	end
+	
 	if managers.blackmarket:equipped_weapon_slot(self._data.inventory_category) ~= self._data.inventory_slot then return end
+	
 	local conceal_crit_bonus = managers.player:critical_hit_chance() * 100
 	local detection_time_multiplier = managers.blackmarket:get_suspicion_of_local_player()
 	local detection_distance_multiplier = 1 / math.sqrt(detection_time_multiplier)
 	
+	self:row({ h = 15 })
 	self:row():l_text("Critical Hit Chance:"):r_text("%.0f%%", {data = {conceal_crit_bonus}})
 	self:row({ h = 15 })
 	self:row():l_text("Concealment Detection Stats:")
@@ -1539,7 +1569,7 @@ end
 
 
 function InventoryStatsPopup:_primaries_suppression()
-	if self._data.category == "grenade_launcher" then return end
+	if self._data.category == "grenade_launcher" or self._data.category == "saw" then return end
 
 	local panic_chance = self._data.tweak.panic_suppression_chance and self._data.tweak.panic_suppression_chance * 100
 	local base_and_mod = (self._data.base_stats.suppression.value + self._data.mods_stats.suppression.value + 2) / 10
@@ -1553,7 +1583,7 @@ function InventoryStatsPopup:_primaries_suppression()
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
 	self:row({ h = 15 })
 	
-	if panic_chance then self:row():l_text("Panic Chance (requires Disturbing the Peace):"):r_text("%d%%", {data = {panic_chance}}) end
+	if panic_chance then self:row():l_text("Panic Chance (requires Disturbing the Peace):"):r_text("%.0f%%", {data = {panic_chance}}) end
 	self:row():l_text("Base + Mod Suppression:"):r_text("%.2f", {data = {base_and_mod}})
 	self:row():l_text("Skill Multiplier:"):r_text("%.2f", {data = {skill}})
 	if global_suppression_mul ~= 1 then self:row():l_text("Innate Suppression Multiplier:"):r_text("%.2f", {data = {global_suppression_mul}}) end
@@ -1609,7 +1639,7 @@ InventoryStatsPopup._melee_weapons_concealment = InventoryStatsPopup._melee_weap
 function InventoryStatsPopup:_armors_armor()
 	local armor_tweak = tweak_data.blackmarket.armors[self._data.name]
 	local player_tweak = tweak_data.player
-	local health = player_tweak.damage.HEALTH_INIT * 10
+	local health = player_tweak.damage.HEALTH_INIT * tweak_data.gui.stats_present_multiplier
 	local health_mul = managers.player:health_skill_multiplier()
 	local regen_time = player_tweak.damage.REGENERATE_TIME * managers.player:body_armor_regen_multiplier(false)
 	local speed = player_tweak.movement_state.standard.movement.speed
@@ -1642,7 +1672,9 @@ InventoryStatsPopup._armors_stamina = InventoryStatsPopup._armors_armor
 
 function InventoryStatsPopup:_mods_magazine()
 	local index_stats = {}
-	for _, stat in pairs(self._data.stat_table) do index_stats[stat.name] = self._data.stats and self._data.stats[stat.name] or 0 end
+	for _, stat in pairs(self._data.stat_table) do
+		index_stats[stat.name] = self._data.stats and self._data.stats[stat.name] or 0
+	end
 	
 	self:row():l_text("Index Values:")
 	if self._data.type == "sight" then self:row({ s = 0.9 }):l_text("\tZOOM"):r_text("%d", {data = {self._data.stats.zoom or 0}}) end
