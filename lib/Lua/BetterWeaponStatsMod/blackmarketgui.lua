@@ -135,13 +135,11 @@ function BlackMarketGui:_get_skill_stats(name, category, slot, base_stats, mods_
 					multiplier = 1 / math.max(multiplier, 0.01)
 				end
 				skill_stats[stat.name].skill_in_effect = multiplier ~= 1 or modifier ~= 0
-				if stat.name == "spread" then
-					skill_stats[stat.name].value = multiplier - 1
-				elseif stat.name == "recoil" then
+				if stat.name == "recoil" then
 					local recoil_value = tweak_data.weapon.stats.recoil[math.clamp(base_stats[stat.name].index + mods_stats[stat.name].index, 1, #tweak_data.weapon.stats.recoil)]
 					skill_stats[stat.name].value = (tweak_data.weapon.stats.recoil[1] - recoil_value / multiplier) * tweak_data.gui.stats_present_multiplier - base_value
 				else
-					skill_stats[stat.name].value = modifier + base_value * multiplier - base_value
+					skill_stats[stat.name].value = stat.name == "spread" and multiplier or modifier + base_value * multiplier - base_value
 				end
 			end
 		end
@@ -1253,8 +1251,9 @@ end
 function InventoryStatsPopup:_primaries_magazine()
 	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(self._data.category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(self._data.name, "reload_speed_multiplier", 1)))
 	local mag = self._data.base_stats.magazine.value + self._data.mods_stats.magazine.value + self._data.skill_stats.magazine.value
-	local reload_not_empty = self._data.tweak.timers and self._data.tweak.timers.reload_not_empty
-	local reload_empty = self._data.tweak.timers and self._data.tweak.timers.reload_empty
+	local timers = self._data.tweak.timers
+	local reload_not_empty = timers and timers.reload_not_empty
+	local reload_empty = timers and timers.reload_empty
 	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value)
 	
 	if reload_not_empty and reload_empty then
@@ -1267,15 +1266,21 @@ function InventoryStatsPopup:_primaries_magazine()
 		end
 	else
 		self:row():l_text("Reload Time:")
-		if self._data.name == "striker" then
-			self:row({ s = 0.9 }):l_text("\tFirst Shell:"):r_text("%.2fs", {data = {1 / reload_mul}})
-			self:row({ s = 0.9 }):l_text("\tEach Additional Shell:"):r_text("%.2fs", {data = {18 / 30 / reload_mul}})
-			self:row({ s = 0.9 }):l_text("\tFull:"):r_text("%.2fs", {data = {(12 / 30 + mag * 18 / 30) / reload_mul}})
-			self:row({ s = 0.9 }):l_text("\tEnd delay (Cancelable):"):r_text("%.2fs", {data = {0.4 / reload_mul}})
+		if timers.shotgun_reload_enter then
+			self:row({ s = 0.9 }):l_text("\tFirst Shell:"):r_text("%.2fs", {data = {(timers.shotgun_reload_enter + timers.shotgun_reload_shell - timers.shotgun_reload_first_shell_offset) / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tEach Additional Shell:"):r_text("%.2fs", {data = {timers.shotgun_reload_shell / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tFull:"):r_text("%.2fs", {data = {(timers.shotgun_reload_enter + timers.shotgun_reload_shell * mag - timers.shotgun_reload_first_shell_offset) / reload_mul}})
+			if timers.shotgun_reload_exit_empty == timers.shotgun_reload_exit_not_empty then
+				self:row({ s = 0.9 }):l_text("\tEnd delay (Cancelable):"):r_text("%.2fs", {data = {timers.shotgun_reload_exit_empty / reload_mul}})
+			else
+				self:row({ s = 0.9 }):l_text("\tEnd delay (Cancelable):")
+				self:row({ s = 0.81 }):l_text("\t\tPartial Reload:"):r_text("%.2fs", {data = {timers.shotgun_reload_exit_not_empty / reload_mul}})
+				self:row({ s = 0.81 }):l_text("\t\tFull Reload:"):r_text("%.2fs", {data = {timers.shotgun_reload_exit_empty / reload_mul}})
+			end
 		else
 			self:row({ s = 0.9 }):l_text("\tFirst Shell:"):r_text("%.2fs", {data = {(17 / 30 - 0.03) / reload_mul}})
 			self:row({ s = 0.9 }):l_text("\tEach Additional Shell:"):r_text("%.2fs", {data = {17 / 30 / reload_mul}})
-			self:row({ s = 0.9 }):l_text("\tFull:"):r_text("%.2fs", {data = {(-0.03 + mag * 17 / 30) / reload_mul}})
+			self:row({ s = 0.9 }):l_text("\tFull:"):r_text("%.2fs", {data = {(mag * 17 / 30 - 0.03) / reload_mul}})
 			self:row({ s = 0.9 }):l_text("\tEnd delay (Cancelable):")
 			self:row({ s = 0.81 }):l_text("\t\tPartial Reload:"):r_text("%.2fs", {data = {0.3 / reload_mul}})
 			self:row({ s = 0.81 }):l_text("\t\tFull Reload:"):r_text("%.2fs", {data = {0.7 / reload_mul}})
@@ -1355,18 +1360,33 @@ function InventoryStatsPopup:_primaries_damage()
 	local ammo_data = self._data.ammo_data
 	local pierces_shields = self._data.tweak.can_shoot_through_shield or (ammo_data and ammo_data.can_shoot_through_shield)
 	local explosive = ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher"
+	local incendiary = ammo_data and (ammo_data.bullet_class == "FlameBulletBase" or ammo_data.launcher_grenade == "launcher_incendiary") or self._data.category == "flamethrower"
 	
 	self:row():l_text("Index Values:")
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats.damage.index}})
 	self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats.damage.index}})
 	local bounded_total = math.clamp(self._data.base_stats.damage.index + self._data.mods_stats.damage.index, 1, #tweak_data.weapon.stats.damage)
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total}})
-	--if self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers.damage then self:row():l_text("Innate Damage Multiplier:"):r_text("%0.2f", {data = {self._data.tweak.stats_modifiers.damage}}) end
 	self:row({ h = 15 })
 	
-	if explosive then
-		if self._data.name == "gre_m79" then self:row():l_text("Blast Radius:"):r_text("3.5m") end
-		if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("5m") end
+	if explosive or incendiary then
+		if self._data.name == "gre_m79" or self._data.name == "m32" then
+			if incendiary then
+				self:row():l_text("Napalm:")
+				self:row({ s = 0.9 }):l_text("\tRadius:"):r_text("%.2fm", {data = {tweak_data.grenades.launcher_incendiary.range * 3 / 100}})
+				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {tweak_data.grenades.launcher_incendiary.burn_duration}})
+				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.0f", {data = {tweak_data.grenades.launcher_incendiary.damage / tweak_data.grenades.launcher_incendiary.burn_tick_period * tweak_data.gui.stats_present_multiplier}})
+				self:row({ h = 15 })
+			else
+				self:row():l_text("Blast Radius:"):r_text("%.2fm", {data = {tweak_data.grenades.launcher_frag.range / 100}})
+			end
+		end
+		if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("%.2fm", {data = {tweak_data.grenades.launcher_rocket.range / 100}}) end
+		if incendiary then
+			self:row():l_text("Fire DOT:")
+			self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("10s")
+			self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("10")
+		end
 	else
 		local difficulties = {
 			{ id = "ok", name = "OK" },
@@ -1442,7 +1462,7 @@ function InventoryStatsPopup:_primaries_damage()
 	if self._data.category ~= "shotgun" then
 		return
 	else
-		if not explosive then self:row({ h = 15 }) end
+		if not (explosive or incendiary) then self:row({ h = 15 }) end
 	end
 	
 	local near = self._data.tweak.damage_near / 100
@@ -1467,7 +1487,7 @@ function InventoryStatsPopup:_primaries_spread()
 	if self._data.tweak.category == "saw" then return end
 	
 	local base_and_mod = tweak_data.weapon.stats.spread[math.clamp(self._data.base_stats.spread.index + self._data.mods_stats.spread.index, 1, #tweak_data.weapon.stats.spread)]
-	local skill_value = self._data.skill_stats.spread.value
+	local skill_value = self._data.skill_stats.spread.value - 1
 	local global_spread_mul = self._data.tweak.stats_modifiers and self._data.tweak.stats_modifiers.spread or 1
 	local spread = self._data.tweak.spread
 	
@@ -1497,13 +1517,6 @@ function InventoryStatsPopup:_primaries_spread()
 	self:row({ s = 0.9 }):l_text("\tStanding-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_standing, DR(spread.moving_standing)}})
 	self:row({ s = 0.9 }):l_text("\tCrouching:"):r_text("%.2f (%.2f)", {data = {spread.crouching, DR(spread.crouching)}})
 	self:row({ s = 0.9 }):l_text("\tCrouching-Moving:"):r_text("%.2f (%.2f)", {data = {spread.moving_crouching, DR(spread.moving_crouching)}})
-	-- self:row({ h = 15 })
-	
-	-- self:row():l_text("Zoom Index Values:")
-	-- self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats.zoom.index}})
-	-- self:row({ s = 0.9 }):l_text("\tMod:"):r_text("%d", {data = {self._data.mods_stats.zoom.index}})
-	-- local bounded_total_zoom = math.clamp(self._data.base_stats.zoom.index + self._data.mods_stats.zoom.index, 1, #tweak_data.weapon.stats.zoom)
-	-- self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%d", {data = {bounded_total_zoom}})
 end
 
 
@@ -1538,17 +1551,19 @@ end
 function InventoryStatsPopup:_primaries_concealment()
 	local base_alert_index = self._data.tweak.stats and self._data.tweak.stats.alert_size
 	local mod_alert_index = self._data.factory_id and self._data.blueprint and managers.weapon_factory:get_stats(self._data.factory_id, self._data.blueprint)["alert_size"] or 0
-	local total_alert = tweak_data.weapon.stats.alert_size[math.clamp(base_alert_index + mod_alert_index, 1, #tweak_data.weapon.stats.alert_size)]
-	local sawing_alert = self._data.tweak.hit_alert_size_increase and tweak_data.weapon.stats.alert_size[math.clamp(base_alert_index + mod_alert_index - self._data.tweak.hit_alert_size_increase, 1, #tweak_data.weapon.stats.alert_size)]
+	local total_alert = base_alert_index and mod_alert_index and tweak_data.weapon.stats.alert_size[math.clamp(base_alert_index + mod_alert_index, 1, #tweak_data.weapon.stats.alert_size)]
+	local sawing_alert = total_alert and self._data.tweak.hit_alert_size_increase and tweak_data.weapon.stats.alert_size[math.clamp(base_alert_index + mod_alert_index - self._data.tweak.hit_alert_size_increase, 1, #tweak_data.weapon.stats.alert_size)]
 	
-	if sawing_alert then
-		self:row():l_text("Alert Radius:")
-		self:row({ s = 0.9 }):l_text("\tRegular:"):r_text("%.1fm", {data = {total_alert / 100}})
-		self:row({ s = 0.9 }):l_text("\tSawing:"):r_text("%.1fm", {data = {sawing_alert / 100}})
-	elseif self._data.ammo_data and self._data.ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher" then
-		self:row():l_text("Alert Radius (Explosion):"):r_text("%dm", {data = {100}})
-	else
-		self:row():l_text("Alert Radius:"):r_text("%.1fm", {data = {total_alert / 100}})
+	if self._data.ammo_data and self._data.ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher" then
+		self:row():l_text("Alert Radius (Explosion):"):r_text("100m")
+	elseif total_alert then
+		if sawing_alert then
+			self:row():l_text("Alert Radius:")
+			self:row({ s = 0.9 }):l_text("\tRegular:"):r_text("%.1fm", {data = {total_alert / 100}})
+			self:row({ s = 0.9 }):l_text("\tSawing:"):r_text("%.1fm", {data = {sawing_alert / 100}})
+		else
+			self:row():l_text("Alert Radius:"):r_text("%.1fm", {data = {total_alert / 100}})
+		end
 	end
 	
 	if managers.blackmarket:equipped_weapon_slot(self._data.inventory_category) ~= self._data.inventory_slot then return end
