@@ -1,4 +1,5 @@
 toggle_greater_precision = true
+local swap_positions = nil
 
 local _blackmarketgui_function_ptr1 = BlackMarketGui.mouse_moved
 local _blackmarketgui_function_ptr2 = BlackMarketGui._get_base_stats
@@ -866,7 +867,12 @@ function BlackMarketGui:_create_stat_popup()
 	if not self._slot_data.equipped then
 		self._selected_stat_popup = self._selected_stat_popup or InventoryStatsPopup:new(self._panel, false)
 		self._selected_stat_popup:update(self._popup_stat, self:_get_popup_data(false))
-		self._selected_stat_popup:set_position(self._equipped_stat_popup._panel:x() - self._selected_stat_popup:w(), self._equipped_stat_popup._panel:y())
+		if not swap_positions then
+			self._selected_stat_popup:set_position(self._stats_panel:x() - 10 - self._selected_stat_popup:w(), self._panel:h()/2 - self._selected_stat_popup:h()/2)
+			self._equipped_stat_popup:set_position(self._selected_stat_popup._panel:x() - self._equipped_stat_popup:w(), self._selected_stat_popup._panel:y())
+		else
+			self._selected_stat_popup:set_position(self._equipped_stat_popup._panel:x() - self._selected_stat_popup:w(), self._equipped_stat_popup._panel:y())
+		end
 	elseif self._selected_stat_popup then
 		self._selected_stat_popup:delete()
 		self._selected_stat_popup = nil
