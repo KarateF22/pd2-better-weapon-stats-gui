@@ -23,7 +23,9 @@ end
 
 
 function BlackMarketGui:_get_base_stats(name)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr2(self, name) end
+	if not toggle_greater_precision then
+		return _blackmarketgui_function_ptr2(self, name)
+	end
 	
 	local base_stats = {}
 	local index
@@ -86,7 +88,9 @@ end
 
 
 function BlackMarketGui:_get_skill_stats(name, category, slot, base_stats, mods_stats, silencer, single_mod, auto_mod)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr3(self, name, category, slot, base_stats, mods_stats, silencer, single_mod, auto_mod) end
+	if not toggle_greater_precision then
+		return _blackmarketgui_function_ptr3(self, name, category, slot, base_stats, mods_stats, silencer, single_mod, auto_mod)
+	end
 
 	local skill_stats = {}
 	for _, stat in pairs(self._stats_shown) do
@@ -151,7 +155,9 @@ end
 
 
 function BlackMarketGui:_get_mods_stats(name, base_stats, equipped_mods)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr4(self, name, base_stats, equipped_mods) end
+	if not toggle_greater_precision then
+		return _blackmarketgui_function_ptr4(self, name, base_stats, equipped_mods)
+	end
 
 	local mods_stats = {}
 	local modifier_stats = tweak_data.weapon[name].stats_modifiers
@@ -238,15 +244,23 @@ end
 
 
 function BlackMarketGui:show_stats()
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr5(self) end
+	if not toggle_greater_precision then
+		return _blackmarketgui_function_ptr5(self)
+	end
 
-	if not self._stats_panel or not self._rweapon_stats_panel or not self._armor_stats_panel or not self._mweapon_stats_panel then return end
+	if not self._stats_panel or not self._rweapon_stats_panel or not self._armor_stats_panel or not self._mweapon_stats_panel then
+		return
+	end
 	self._stats_panel:hide()
 	self._rweapon_stats_panel:hide()
 	self._armor_stats_panel:hide()
 	self._mweapon_stats_panel:hide()
-	if not self._slot_data then return end
-	if not self._slot_data.comparision_data then return end
+	if not self._slot_data then
+		return
+	end
+	if not self._slot_data.comparision_data then
+		return
+	end
 	local weapon = managers.blackmarket:get_crafted_category_slot(self._slot_data.category, self._slot_data.slot)
 	local name = weapon and weapon.weapon_id or self._slot_data.name
 	local category = self._slot_data.category
@@ -685,7 +699,9 @@ end
 
 
 function BlackMarketGui:_get_stats(name, category, slot)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr6(self, name, category, slot) end
+	if not toggle_greater_precision then
+		return _blackmarketgui_function_ptr6(self, name, category, slot)
+	end
 	
 	local equipped_mods
 	local silencer = false
@@ -718,7 +734,9 @@ end
 
 
 function BlackMarketGui:_get_weapon_mod_stats(mod_name, weapon_name, base_stats, mods_stats, equipped_mods)
-	if not toggle_greater_precision then return _blackmarketgui_function_ptr7(self, mod_name, weapon_name, base_stats, mods_stats, equipped_mods) end
+	if not toggle_greater_precision then
+		return _blackmarketgui_function_ptr7(self, mod_name, weapon_name, base_stats, mods_stats, equipped_mods)
+	end
 
 	local tweak_stats = tweak_data.weapon.stats
 	local tweak_factory = tweak_data.weapon.factory.parts
@@ -963,7 +981,9 @@ function BlackMarketGui:_get_popup_data(equipped)
 			end
 		end
 		local name = equipped and equipped_mod or selected_mod
-		if not name then return nil end
+		if not name then
+			return nil
+		end
 		local localized_name
 		if equipped then
 			if equipped_mod then
@@ -1293,7 +1313,9 @@ function InventoryStatsPopup:_primaries_magazine()
 		end
 	end
 	
-	if self._data.tweak.category == "saw" then return end
+	if self._data.tweak.category == "saw" then
+		return
+	end
 	
 	self:row({ h = 15 })
 	self:row():l_text("Time To Empty:"):r_text("%.2fs", {data = {mag * rof - rof}})
@@ -1319,7 +1341,9 @@ function InventoryStatsPopup:_primaries_totalammo()
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.2f - %.2f", {data = {pickup[1], pickup[2]}})
 	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.2f - %.2f", {data = {pickup[1] * ammo_pickup_min_mul, pickup[2] * ammo_pickup_max_mul}})
 	
-	if self._data.tweak.category == "saw" then return end
+	if self._data.tweak.category == "saw" then
+		return
+	end
 	
 	local damage = self._data.base_stats.damage.value + self._data.mods_stats.damage.value + self._data.skill_stats.damage.value
 	local totalammo = self._data.base_stats.totalammo.value + self._data.mods_stats.totalammo.value + self._data.skill_stats.totalammo.value
@@ -1335,7 +1359,9 @@ end
 
 
 function InventoryStatsPopup:_primaries_fire_rate()
-	if self._data.tweak.category == "saw" then return end
+	if self._data.tweak.category == "saw" then
+		return
+	end
 	
 	local akimbo_mul = self._data.category == "akimbo" and 2 or 1
 	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value) / akimbo_mul
@@ -1357,7 +1383,9 @@ end
 
 
 function InventoryStatsPopup:_primaries_damage()
-	if self._data.tweak.category == "saw" then return end
+	if self._data.tweak.category == "saw" then
+		return
+	end
 	
 	local damage_base = self._data.base_stats.damage.value / 10
 	local damage_mod = self._data.mods_stats.damage.value / 10
@@ -1367,6 +1395,7 @@ function InventoryStatsPopup:_primaries_damage()
 	local pierces_shields = self._data.tweak.can_shoot_through_shield or (ammo_data and ammo_data.can_shoot_through_shield)
 	local explosive = ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher"
 	local incendiary = ammo_data and (ammo_data.bullet_class == "FlameBulletBase" or ammo_data.launcher_grenade == "launcher_incendiary") or self._data.category == "flamethrower"
+	local no_hs = explosive or incendiary
 	
 	self:row():l_text("Index Values:")
 	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%d", {data = {self._data.base_stats.damage.index}})
@@ -1393,39 +1422,48 @@ function InventoryStatsPopup:_primaries_damage()
 			self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("10s")
 			self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("10")
 		end
-	else
-		local difficulties = {
-			{ id = "ok", name = "OK" },
-			{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
-		}
-		local enemies = {
-			{ id = "fbi_swat", name = "FBI Swat (Green)", difficulty_override = { dw = { hp = tweak_data.character.fbi_swat.HEALTH_INIT, hs = tweak_data.character.fbi_swat.headshot_dmg_mul }}},
-			{ id = "fbi_heavy_swat", name = "FBI Heavy Swat (Tan)"},
-			{ id = "city_swat", name = "Murky / GenSec Elite (Gray)", difficulty_override = { dw = { hp = 24, hs = tweak_data.character.fbi_swat.HEALTH_INIT / 8 }}},
-			{ id = "taser", name = "Taser", is_special = true },
-			{ id = "shield", name = pierces_shields and "Shield (Piercing)" or "Shield", is_special = true , damage_mul = pierces_shields and .25 or 1 },
-			{ id = "spooc", name = "Cloaker", is_special = true  },
-		}
+		self:row({ h = 15 })
+	end
+	
+	local difficulties = {
+		{ id = "ok", name = "OK" },
+		{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
+	}
+	local enemies = {
+		{ id = "fbi_swat", name = "FBI Swat (Green)", difficulty_override = { dw = { hp = tweak_data.character.fbi_swat.HEALTH_INIT, hs = tweak_data.character.fbi_swat.headshot_dmg_mul }}},
+		{ id = "fbi_heavy_swat", name = "FBI Heavy Swat (Tan)"},
+		{ id = "city_swat", name = "Murky / GenSec Elite (Gray)", difficulty_override = { dw = { hp = 24, hs = tweak_data.character.fbi_swat.HEALTH_INIT / 8 }}},
+		{ id = "taser", name = "Taser", is_special = true },
+		{ id = "shield", name = pierces_shields and "Shield (Piercing)" or "Shield", is_special = true , damage_mul = pierces_shields and .25 or 1 },
+		{ id = "spooc", name = "Cloaker", is_special = true  },
+	}
+	if no_hs then
+		table.insert(enemies, { id = "tank", name = "Bulldozer", is_special = true  })
+	end
 
-		local hs_mult = managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
-		local special_mult = managers.player:upgrade_value("weapon", "special_damage_taken_multiplier", 1)
-		
-		self:row():l_text("Headshots to kill:"):r_text("(OK / DW)")
-		for _, data in ipairs(enemies) do
-			local row = self:row({ s = 0.9 }):l_text("\t\t" .. data.name .. ":")
-			for i, diff in ipairs(difficulties) do
-				local hp = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hp or (tweak_data.character[data.id].HEALTH_INIT * (diff.hp or 1))
-				local hs = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hs or (tweak_data.character[data.id].headshot_dmg_mul * (diff.hs or 1))
-				local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult
-				local adjusted_damage = math.ceil(math.max(raw_damage / (hp/512), 1)) * (hp/512)
-				row:r_text("%2d (%.2f)", { no_trim = true, data = { math.ceil(hp / adjusted_damage), hp / adjusted_damage }})
-				if i ~= #difficulties then
-					row:r_text("/")
-				end
+	local hs_mult = no_hs and 1 or managers.player:upgrade_value("weapon", "passive_headshot_damage_multiplier", 1)
+	local special_mult = no_hs and 1 or managers.player:upgrade_value("weapon", "special_damage_taken_multiplier", 1)
+	
+	self:row():l_text(no_hs and "Shots to kill:" or "Headshots to kill:"):r_text("(OK / DW)")
+	for _, data in ipairs(enemies) do
+		local row = self:row({ s = 0.9 }):l_text("\t\t" .. data.name .. ":")
+		for i, diff in ipairs(difficulties) do
+			local hp = data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hp or (tweak_data.character[data.id].HEALTH_INIT * (diff.hp or 1))
+			local hs = incendiary and 1
+				or explosive and (tweak_data.character[data.id].damage.explosion_damage_mul or 1)
+				or data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hs
+				or (tweak_data.character[data.id].headshot_dmg_mul * (diff.hs or 1))
+			local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult
+			local adjusted_damage = math.ceil(math.max(raw_damage / (hp/512), 1)) * (hp/512)
+			row:r_text("%2d (%.2f)", { no_trim = true, data = { math.ceil(hp / adjusted_damage), hp / adjusted_damage }})
+			if i ~= #difficulties then
+				row:r_text("/")
 			end
 		end
+	end
 
-		--Dozer special case
+	--Dozer special case
+	if not no_hs then
 		for i, diff in ipairs(difficulties) do
 			local hp = tweak_data.character.tank.HEALTH_INIT * (diff.hp or 1)
 			local hs = tweak_data.character.tank.headshot_dmg_mul * (diff.hs or 1)
@@ -1467,8 +1505,6 @@ function InventoryStatsPopup:_primaries_damage()
 	
 	if self._data.category ~= "shotgun" then
 		return
-	else
-		if not (explosive or incendiary) then self:row({ h = 15 }) end
 	end
 	
 	local near = self._data.tweak.damage_near / 100
@@ -1490,7 +1526,9 @@ end
 
 
 function InventoryStatsPopup:_primaries_spread()
-	if self._data.tweak.category == "saw" then return end
+	if self._data.tweak.category == "saw" then
+		return
+	end
 	
 	local base_and_mod = tweak_data.weapon.stats.spread[math.clamp(self._data.base_stats.spread.index + self._data.mods_stats.spread.index, 1, #tweak_data.weapon.stats.spread)]
 	local skill_value = self._data.skill_stats.spread.value - 1
@@ -1572,7 +1610,9 @@ function InventoryStatsPopup:_primaries_concealment()
 		end
 	end
 	
-	if managers.blackmarket:equipped_weapon_slot(self._data.inventory_category) ~= self._data.inventory_slot then return end
+	if managers.blackmarket:equipped_weapon_slot(self._data.inventory_category) ~= self._data.inventory_slot then
+		return
+	end
 	
 	local conceal_crit_bonus = managers.player:critical_hit_chance() * 100
 	local detection_time_multiplier = managers.blackmarket:get_suspicion_of_local_player()
@@ -1590,7 +1630,9 @@ end
 
 
 function InventoryStatsPopup:_primaries_suppression()
-	if self._data.category == "grenade_launcher" or self._data.category == "saw" then return end
+	if self._data.category == "grenade_launcher" or self._data.category == "saw" then
+		return
+	end
 
 	local panic_chance = self._data.tweak.panic_suppression_chance and self._data.tweak.panic_suppression_chance * 100
 	local base_and_mod = (self._data.base_stats.suppression.value + self._data.mods_stats.suppression.value + 2) / 10
