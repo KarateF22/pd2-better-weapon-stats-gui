@@ -1,0 +1,30 @@
+{
+	"name" : "Better Stats GUI",
+	"description" : "Enhance your game's Inventory Statistics screen and view Hidden Stats for your weapons while fixing how misleading ones are displayed.",
+	"author" : "KarateF22",
+	"contact" : "KarateF22 on Steam",
+	"version" : "3.8",
+	"updates" : [
+		{
+			"revision" : 380,
+			"identifier" : "BWS-GUI"
+		}
+	],
+	"hooks" : [
+		{
+			"hook_id" : "lib/managers/menu/blackmarketgui",
+			"script_path" : "blackmarketgui.lua"
+		}
+	],
+	"keybinds" : [
+		{
+			"keybind_id" : "BWS-GUI_keybind",
+			"name" : "Toggle Better Stats GUI Mod",
+			"description" : "Turns the Better Stats GUI mod on and off",
+			"script_path" : "toggle.lua",
+			"run_in_menu" : true,
+			"run_in_game" : false,
+			"localized" : false
+		}
+	]
+}

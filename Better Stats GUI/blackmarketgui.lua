@@ -910,6 +910,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 		local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name)
 		local blueprint = managers.blackmarket:get_weapon_blueprint(category, slot)
 		local ammo_data = factory_id and blueprint and managers.weapon_factory:get_ammo_data_from_weapon(factory_id, blueprint) or {}
+		ammo_data.fire_dot_data = tweak_data.weapon[name].fire_dot_data
 		local custom_stats = factory_id and blueprint and managers.weapon_factory:get_custom_stats_from_weapon(factory_id, blueprint)
 		if custom_stats then
 			for part_id, stats in pairs(custom_stats) do
@@ -920,6 +921,9 @@ function BlackMarketGui:_get_popup_data(equipped)
 					if stats.ammo_pickup_max_mul then
 						ammo_data.ammo_pickup_max_mul = ammo_data.ammo_pickup_max_mul and ammo_data.ammo_pickup_max_mul * stats.ammo_pickup_max_mul or stats.ammo_pickup_max_mul
 					end
+				end
+				if stats.fire_dot_data then
+					ammo_data.fire_dot_data = stats.fire_dot_data
 				end
 			end
 		end
@@ -1276,6 +1280,7 @@ end
 
 function InventoryStatsPopup:_primaries_magazine()
 	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(self._data.category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(self._data.name, "reload_speed_multiplier", 1)))
+	if self._data.category == "bow" then reload_mul = reload_mul * 3 end
 	local mag = self._data.base_stats.magazine.value + self._data.mods_stats.magazine.value + self._data.skill_stats.magazine.value
 	local timers = self._data.tweak.timers
 	local reload_not_empty = timers and timers.reload_not_empty
@@ -1364,20 +1369,32 @@ function InventoryStatsPopup:_primaries_fire_rate()
 	end
 	
 	local akimbo_mul = self._data.category == "akimbo" and 2 or 1
-	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value) / akimbo_mul
+	local charge_time = self._data.tweak.charge_data and self._data.tweak.charge_data.max_t
+	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value + charge_time or 0) / akimbo_mul
 	local dmg = self._data.base_stats.damage.value + self._data.mods_stats.damage.value + self._data.skill_stats.damage.value
 	local mag = self._data.base_stats.magazine.value + self._data.mods_stats.magazine.value + self._data.skill_stats.magazine.value
-	local reload_not_empty = self._data.tweak.timers.reload_not_empty
-	local reload_empty = self._data.tweak.timers.reload_empty
+	local timers = self._data.tweak.timers
+	local reload_mul = managers.blackmarket:_convert_add_to_mul(1 + (1 - managers.player:upgrade_value(self._data.category, "reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value("weapon", "passive_reload_speed_multiplier", 1)) + (1 - managers.player:upgrade_value(self._data.name, "reload_speed_multiplier", 1)))
+	if self._data.category == "bow" then reload_mul = reload_mul * 3 end
+	local reload_not_empty = timers and timers.reload_not_empty
+	local reload_empty = timers and timers.reload_empty
 	
+	if charge_time then
+		self:row():l_text("Charge Time:"):r_text("%.1fs", {data = {charge_time}})
+		if self._data.category == "bow" then
+			self:row():l_text("Charge Threshold:"):r_text("%.1fs", {data = {0.2}})
+		end
+		self:row({ h = 15 })
+	end
 	self:row():l_text("DPS:"):r_text("%.1f", {data = {dmg / rof}})
 	if reload_not_empty then
 		if reload_not_empty < reload_empty then
-			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof) * ((mag - akimbo_mul) * rof) / ((mag - akimbo_mul) * rof + reload_not_empty)}})
+			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof) * ((mag - akimbo_mul) * rof) / ((mag - akimbo_mul) * rof + reload_not_empty / reload_mul)}})
 		else
-			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof * (mag * rof)) / (mag * rof + reload_empty)}})
+			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof * (mag * rof)) / (mag * rof + reload_empty / reload_mul)}})
 		end
 	end
+	
 end
 
 
@@ -1387,13 +1404,13 @@ function InventoryStatsPopup:_primaries_damage()
 		return
 	end
 	
-	local damage_base = self._data.base_stats.damage.value / 10
-	local damage_mod = self._data.mods_stats.damage.value / 10
-	local damage_skill = self._data.skill_stats.damage.value / 10
+	local damage_base = self._data.base_stats.damage.value / tweak_data.gui.stats_present_multiplier
+	local damage_mod = self._data.mods_stats.damage.value / tweak_data.gui.stats_present_multiplier
+	local damage_skill = self._data.skill_stats.damage.value / tweak_data.gui.stats_present_multiplier
 	local damage_total = damage_base + damage_mod + damage_skill
 	local ammo_data = self._data.ammo_data
 	local pierces_shields = self._data.tweak.can_shoot_through_shield or (ammo_data and ammo_data.can_shoot_through_shield)
-	local explosive = ammo_data and ammo_data.bullet_class == "InstantExplosiveBulletBase" or self._data.category == "grenade_launcher"
+	local explosive = ammo_data and (ammo_data.bullet_class == "InstantExplosiveBulletBase" or ammo_data.launcher_grenade == "west_arrow_exp") or self._data.category == "grenade_launcher"
 	local incendiary = ammo_data and (ammo_data.bullet_class == "FlameBulletBase" or ammo_data.launcher_grenade == "launcher_incendiary") or self._data.category == "flamethrower"
 	local no_hs = explosive or incendiary
 	
@@ -1408,19 +1425,27 @@ function InventoryStatsPopup:_primaries_damage()
 		if self._data.name == "gre_m79" or self._data.name == "m32" then
 			if incendiary then
 				self:row():l_text("Napalm:")
-				self:row({ s = 0.9 }):l_text("\tRadius:"):r_text("%.2fm", {data = {tweak_data.grenades.launcher_incendiary.range * 3 / 100}})
-				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {tweak_data.grenades.launcher_incendiary.burn_duration}})
-				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.0f", {data = {tweak_data.grenades.launcher_incendiary.damage / tweak_data.grenades.launcher_incendiary.burn_tick_period * tweak_data.gui.stats_present_multiplier}})
+				self:row({ s = 0.9 }):l_text("\tRadius:"):r_text("%.2fm", {data = {tweak_data.projectiles.launcher_incendiary.range * 3 / 100}})
+				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {tweak_data.projectiles.launcher_incendiary.burn_duration}})
+				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.0f", {data = {tweak_data.projectiles.launcher_incendiary.damage / tweak_data.projectiles.launcher_incendiary.burn_tick_period * tweak_data.gui.stats_present_multiplier}})
 				self:row({ h = 15 })
 			else
-				self:row():l_text("Blast Radius:"):r_text("%.2fm", {data = {tweak_data.grenades.launcher_frag.range / 100}})
+				self:row():l_text("Blast Radius:"):r_text("%.2fm", {data = {tweak_data.projectiles.launcher_frag.range / 100}})
 			end
 		end
-		if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("%.2fm", {data = {tweak_data.grenades.launcher_rocket.range / 100}}) end
+		if self._data.name == "rpg7" then self:row():l_text("Blast Radius:"):r_text("%.2fm", {data = {tweak_data.projectiles.launcher_rocket.range / 100}}) end
+		if self._data.name == "plainsrider" then self:row():l_text("Blast Radius:"):r_text("%dm", {data = {2}}) end
 		if incendiary then
 			self:row():l_text("Fire DOT:")
-			self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("10s")
-			self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("10")
+			if ammo_data.fire_dot_data then
+				local fire = ammo_data.fire_dot_data
+				self:row({ s = 0.9 }):l_text("\tApplication Chance:"):r_text("%.0f%%", {data = {fire.dot_trigger_chance}})
+				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - 1}}) --Currently last second is always cut off
+				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text(fire.dot_tick_damage * tweak_data.gui.stats_present_multiplier)
+			else
+				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.0fs", {data = {2}})
+				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.0fs", {data= {20}})
+			end
 		end
 		self:row({ h = 15 })
 	end
@@ -1630,7 +1655,7 @@ end
 
 
 function InventoryStatsPopup:_primaries_suppression()
-	if self._data.category == "grenade_launcher" or self._data.category == "saw" then
+	if self._data.category == "grenade_launcher" or self._data.category == "saw" or self._data.category == "bow" then
 		return
 	end
 
