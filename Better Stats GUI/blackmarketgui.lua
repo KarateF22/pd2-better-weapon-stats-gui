@@ -1370,7 +1370,7 @@ function InventoryStatsPopup:_primaries_fire_rate()
 	
 	local akimbo_mul = self._data.category == "akimbo" and 2 or 1
 	local charge_time = self._data.tweak.charge_data and self._data.tweak.charge_data.max_t
-	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value + charge_time or 0) / akimbo_mul
+	local rof = 60 / (self._data.base_stats.fire_rate.value + self._data.mods_stats.fire_rate.value + self._data.skill_stats.fire_rate.value + (charge_time or 0)) / akimbo_mul
 	local dmg = self._data.base_stats.damage.value + self._data.mods_stats.damage.value + self._data.skill_stats.damage.value
 	local mag = self._data.base_stats.magazine.value + self._data.mods_stats.magazine.value + self._data.skill_stats.magazine.value
 	local timers = self._data.tweak.timers
@@ -1387,11 +1387,12 @@ function InventoryStatsPopup:_primaries_fire_rate()
 		self:row({ h = 15 })
 	end
 	self:row():l_text("DPS:"):r_text("%.1f", {data = {dmg / rof}})
-	if reload_not_empty then
+	if reload_not_empty then 
+		local dps_string = charge_time and "DPS (factoring reloads and charging):" or "DPS (factoring reloads):"
 		if reload_not_empty < reload_empty then
-			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof) * ((mag - akimbo_mul) * rof) / ((mag - akimbo_mul) * rof + reload_not_empty / reload_mul)}})
+			self:row():l_text(dps_string):r_text("%.1f", {data = {(dmg / rof) * ((mag - akimbo_mul) * rof) / ((mag - akimbo_mul) * rof + reload_not_empty / reload_mul)}})
 		else
-			self:row():l_text("DPS (factoring reloads):"):r_text("%.1f", {data = {(dmg / rof * (mag * rof)) / (mag * rof + reload_empty / reload_mul)}})
+			self:row():l_text(dps_string):r_text("%.1f", {data = {(dmg / rof * (mag * rof)) / (mag * rof + reload_empty / reload_mul)}})
 		end
 	end
 	
