@@ -855,18 +855,29 @@ function BlackMarketGui:_check_popup(x, y)
 		self._rweapon_stats_panel,
 		self._mweapon_stats_panel,
 		self._armor_stats_panel,
+		self._info_texts[4],
 	}
 	
 	for _, p in ipairs(panels) do
 		if p:visible() and p:inside(x, y) then
-			for i, stat_row in ipairs(p:children()) do
-				if stat_row:visible() and stat_row:inside(x, y) then
-					if self._popup_stat ~= i then
-						self._popup_stat = i
-						self:_create_stat_popup()
+			if(p.children and p:children()) then
+				for i, stat_row in ipairs(p:children()) do
+					if stat_row:visible() and stat_row:inside(x, y) then
+						if self._popup_stat ~= i then
+							self._popup_stat = i
+							self:_create_stat_popup()
+						end
+						return
 					end
-					return
 				end
+			elseif tweak_data.projectiles[self._slot_data.name] then
+				self._popup_stat = "grenade"
+				self:_create_stat_popup()
+				return
+			elseif tweak_data.blackmarket.deployables[self._slot_data.name] then
+				self._popup_stat = "deployables"
+				self:_create_stat_popup()
+				return
 			end
 		end
 	end
@@ -902,7 +913,7 @@ end
 function BlackMarketGui:_get_popup_data(equipped)
 	local category = self._slot_data.category
 	local data
-
+	
 	if tweak_data.weapon[self._slot_data.name] then
 		local slot = equipped and managers.blackmarket:equipped_weapon_slot(category) or self._slot_data.slot
 		local weapon = equipped and managers.blackmarket:equipped_item(category) or managers.blackmarket:get_crafted_category_slot(category, slot)
@@ -950,27 +961,33 @@ function BlackMarketGui:_get_popup_data(equipped)
 		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
 		data = {
 			inventory_category = category,
-			--inventory_slot = slot,
 			stat_table = self._armor_stats_shown,
 			name = name,
 			localized_name = managers.localization:text(tweak_data.blackmarket.armors[name].name_id),
-			--category = tweak_data.weapon[name].category,
-			--tweak = tweak_data.weapon[name],
-			--factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name),
-			--blueprint = managers.blackmarket:get_weapon_blueprint(category, slot),
 		}
 	elseif tweak_data.blackmarket.melee_weapons[self._slot_data.name] then
 		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
 		data = {
 			inventory_category = category,
-			--inventory_slot = slot,
 			stat_table = self._mweapon_stats_shown,
 			name = name,
 			localized_name = managers.localization:text(tweak_data.blackmarket.melee_weapons[name].name_id),
-			--category = tweak_data.weapon[name].category,
-			--tweak = tweak_data.weapon[name],
-			--factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(name),
-			--blueprint = managers.blackmarket:get_weapon_blueprint(category, slot),
+		}
+	elseif tweak_data.blackmarket.projectiles[self._slot_data.name] then
+		local name, count = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
+		data = {
+			inventory_category = category,
+			stats = tweak_data.projectiles[name],
+			name = name,
+			localized_name = managers.localization:text(tweak_data.blackmarket.projectiles[name].name_id),
+		}
+		data.stats.count = count
+	elseif tweak_data.blackmarket.deployables[self._slot_data.name] then
+		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
+		data = {
+			inventory_category = category,
+			name = name,
+			localized_name = managers.localization:text(tweak_data.blackmarket.deployables[name].name_id),
 		}
 	else
 		local selected_mod = tweak_data.weapon.factory.parts[self._slot_data.name]
@@ -1003,7 +1020,6 @@ function BlackMarketGui:_get_popup_data(equipped)
 		end
 		data = {
 			inventory_category = "mods",
-			--inventory_slot = slot,
 			stat_table = self._stats_shown,
 			name = name,
 			localized_name = localized_name or managers.localization:text(name.name_id),
@@ -1066,7 +1082,14 @@ function InventoryStatsPopup:update(stat_index, data)
 	if data then
 		self._stat = stat_index
 		self._data = data
-		
+		if data.inventory_category == "grenades" then
+			self:_grenades()
+			return self:_finalize()
+		end
+		if data.inventory_category == "deployables" then
+			self:_deployables()
+			return self:_finalize()
+		end
 		local cbk_name = string.format("_%s_%s", data.inventory_category, data.stat_table[stat_index].name)
 		if self[cbk_name] then
 			self[cbk_name](self)
@@ -1783,3 +1806,27 @@ InventoryStatsPopup._mods_spread = InventoryStatsPopup._mods_magazine
 InventoryStatsPopup._mods_recoil = InventoryStatsPopup._mods_magazine
 InventoryStatsPopup._mods_concealment = InventoryStatsPopup._mods_magazine
 InventoryStatsPopup._mods_suppression = InventoryStatsPopup._mods_magazine
+
+function InventoryStatsPopup:_grenades()
+	local stats = self._data.stats
+	if stats.damage then self:row():l_text("Damage:"):r_text("%.2f", {data = {stats.damage * tweak_data.gui.stats_present_multiplier}}) end
+	if stats.player_damage then self:row():l_text("Player Damage:"):r_text("%.2f", {data = {stats.player_damage * tweak_data.gui.stats_present_multiplier}}) end
+	if stats.range then self:row():l_text("Radius:"):r_text("%.2fm", {data = {(stats.fire_dot_data and 3 or 1) * (stats.range / 100)}}) end
+	if stats.burn_duration and stats.burn_tick_period then
+		self:row():l_text("Napalm:")
+		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {stats.burn_duration}})
+		self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.0f", {data = {stats.damage / stats.burn_tick_period * tweak_data.gui.stats_present_multiplier}})
+		self:row({ h = 15 })
+	end
+	if stats.fire_dot_data then
+		local fire = stats.fire_dot_data
+		self:row():l_text("Fire DOT:")
+		self:row({ s = 0.9 }):l_text("\tApplication Chance:"):r_text("%.0f%%", {data = {fire.dot_trigger_chance}})
+		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - 1}}) --Currently last second is always cut off
+		self:row({ s = 0.9 }):l_text("\tDPS:"):r_text(fire.dot_tick_damage * tweak_data.gui.stats_present_multiplier)
+	end
+end
+
+function InventoryStatsPopup:_deployables()
+	--todo
+end

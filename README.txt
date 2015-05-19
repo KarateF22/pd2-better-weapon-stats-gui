@@ -1,18 +1,18 @@
 INSTALLATION
 
-Paste contents of entire folder into your top level Payday 2 folder, found in your Steam directory. It is recommended that you overwrite your IPHLPAPI.dll if present, but make sure you do not remove it if other mods rely on it and you uninstall this mod.
+Paste the Better Stats GUI folder into the mods folder of your PAYDAY 2 game. If you are lacking that folder you need to install either the BLT or BLT:CSE LUA hook.
 
 
 
 USE
 
-By default the mod is enabled and you can press F9 to toggle it on and off. This mod allows you to see additional information via popups when you mouse over the stats area. There are different popups for each stat on weapons, as well as popups for weapon mods, armor, and melees when mousing over them.
+By default the mod is enabled and you can set a keybind to toggle it on and off in mod options. This mod allows you to see additional information via popups when you mouse over the stats area. There are different popups for each stat on weapons, as well as popups for weapon mods, armor, grenades, and equipment when mousing over them.
 
 
 
 UNINSTALLING
 
-Remove the lib/Lua/BetterWeaponStatsMod.lua file and lib/Lua/BetterWeaponStatsMod folder from your Payday 2 directory. If you have Hox Hud or any other lua mod make sure to leave IPHLPAPI.dll, otherwise it is safe to remove it.
+Remove the Better Stats GUI folder from your mods folder. You should leave the mods folder unless you do not have any mods left after uninstalling Better Stats GUI.
 
 
 
