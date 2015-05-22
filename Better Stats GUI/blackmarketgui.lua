@@ -983,7 +983,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 		}
 		data.stats.count = count
 	elseif tweak_data.blackmarket.deployables[self._slot_data.name] then
-		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
+		local name = equipped and Global.player_manager.kit.equipment_slots[1] or self._slot_data.name
 		data = {
 			inventory_category = category,
 			stats = tweak_data.equipments[name],
