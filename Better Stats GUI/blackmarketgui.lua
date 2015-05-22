@@ -914,7 +914,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 	local category = self._slot_data.category
 	local data
 	
-	if tweak_data.weapon[self._slot_data.name] then
+	if tweak_data.weapon[self._slot_data.name] and self._slot_data.name ~= "sentry_gun" then
 		local slot = equipped and managers.blackmarket:equipped_weapon_slot(category) or self._slot_data.slot
 		local weapon = equipped and managers.blackmarket:equipped_item(category) or managers.blackmarket:get_crafted_category_slot(category, slot)
 		local name = equipped and weapon.weapon_id or weapon and weapon.weapon_id or self._slot_data.name
@@ -986,6 +986,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 		local name = equipped and managers.blackmarket:equipped_item(category) or self._slot_data.name
 		data = {
 			inventory_category = category,
+			stats = tweak_data.equipments[name],
 			name = name,
 			localized_name = managers.localization:text(tweak_data.blackmarket.deployables[name].name_id),
 		}
@@ -1464,11 +1465,12 @@ function InventoryStatsPopup:_primaries_damage()
 			if ammo_data.fire_dot_data then
 				local fire = ammo_data.fire_dot_data
 				self:row({ s = 0.9 }):l_text("\tApplication Chance:"):r_text("%.0f%%", {data = {fire.dot_trigger_chance}})
-				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - 1}}) --Currently last second is always cut off
-				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text(fire.dot_tick_damage * tweak_data.gui.stats_present_multiplier)
-			else
-				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.0fs", {data = {2}})
-				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.0fs", {data= {20}})
+				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - .1}})
+				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.2f", {data = {fire.dot_damage / fire.dot_tick_period * tweak_data.gui.stats_present_multiplier}})
+			elseif ammo_data.launcher_grenade == "launcher_incendiary" then
+				local fire = tweak_data.projectiles.launcher_incendiary.fire_dot_data
+				self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - .1}})
+				self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.2f", {data = {fire.dot_damage / fire.dot_tick_period * tweak_data.gui.stats_present_multiplier}})
 			end
 		end
 		self:row({ h = 15 })
@@ -1763,10 +1765,10 @@ function InventoryStatsPopup:_armors_armor()
 	
 	self:row():l_text("Regeneration Delay: "):r_text("%.1fs", {data = {regen_time}})
 	self:row({ h = 15 })
-	self:row():l_text("Player Health:")
-	self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.1f", {data = {health}})
-	self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.1f", {data = {health * health_mul}})
-	self:row({ h = 15 })
+	-- self:row():l_text("Player Health:")
+	-- self:row({ s = 0.9 }):l_text("\tBase:"):r_text("%.1f", {data = {health}})
+	-- self:row({ s = 0.9 }):l_text("\tTotal:"):r_text("%.1f", {data = {health * health_mul}})
+	-- self:row({ h = 15 })
 	self:row():l_text("Movement Speed:")
 	self:row({ s = 0.9 }):l_text("\tWalking:"):r_text("%.3f m/s", {data = {speed.STANDARD_MAX * walking_mul / 100}})
 	self:row({ s = 0.9 }):l_text("\tSprinting:"):r_text("%.3f m/s", {data = {speed.RUNNING_MAX * running_mul / 100}})
@@ -1774,6 +1776,7 @@ function InventoryStatsPopup:_armors_armor()
 	self:row({ s = 0.9 }):l_text("\tAiming:"):r_text("%.3f m/s", {data = {managers.player:has_category_upgrade("player", "steelsight_normal_movement_speed") and (speed.STANDARD_MAX * walking_mul / 100) or (speed.STEELSIGHT_MAX * steelsight_mul / 100)}})
 end
 
+InventoryStatsPopup._armors_health = InventoryStatsPopup._armors_armor
 InventoryStatsPopup._armors_concealment = InventoryStatsPopup._armors_armor
 InventoryStatsPopup._armors_movement = InventoryStatsPopup._armors_armor
 InventoryStatsPopup._armors_dodge = InventoryStatsPopup._armors_armor
@@ -1821,12 +1824,51 @@ function InventoryStatsPopup:_grenades()
 	if stats.fire_dot_data then
 		local fire = stats.fire_dot_data
 		self:row():l_text("Fire DOT:")
-		self:row({ s = 0.9 }):l_text("\tApplication Chance:"):r_text("%.0f%%", {data = {fire.dot_trigger_chance}})
-		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - 1}}) --Currently last second is always cut off
-		self:row({ s = 0.9 }):l_text("\tDPS:"):r_text(fire.dot_tick_damage * tweak_data.gui.stats_present_multiplier)
+		--self:row({ s = 0.9 }):l_text("\tApplication Chance:"):r_text("%.0f%%", {data = {fire.dot_trigger_chance}})
+		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - .1}})
+		self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.2f", {data = {fire.dot_damage / fire.dot_tick_period * tweak_data.gui.stats_present_multiplier}})
 	end
 end
 
 function InventoryStatsPopup:_deployables()
-	--todo
+	local name = self._data.name
+	local stats = self._data.stats
+	self:row():l_text("Quantity:"):r_text("%d", {data = {stats.quantity + managers.player:equiptment_upgrade_value(name, "quantity")}})
+	self:row():l_text("Deploy Time:"):r_text("%.2fs", {data = {stats.deploy_time * (stats.upgrade_deploy_time_multiplier and managers.player:upgrade_value(stats.upgrade_deploy_time_multiplier.category, stats.upgrade_deploy_time_multiplier.upgrade, 1) or 1)}})
+	if tweak_data.interaction[name] and tweak_data.interaction[name].timer and name ~= "ecm_jammer" then 
+		self:row():l_text("Interact Time:"):r_text("%.2fs", {data = {tweak_data.interaction[name].timer * (tweak_data.interaction[name].upgrade_timer_multiplier and managers.player:upgrade_value(tweak_data.interaction[name].upgrade_timer_multiplier.category, tweak_data.interaction[name].upgrade_timer_multiplier.upgrade, 1) or 1)}})
+	end
+	if name == "trip_mine" then
+		self:row():l_text("Interact Time:"):r_text("%.2fs", {data = {tweak_data.interaction.shaped_sharge.timer}}) --lol shaped_sharge
+	elseif name == "ammo_bag" then
+		self:row():l_text("Capacity:"):r_text("%d%%", {data = {(tweak_data.upgrades.ammo_bag_base + managers.player:upgrade_value("ammo_bag", "ammo_increase", 0)) * 100}})
+	elseif name == "doctor_bag" then
+		self:row():l_text("Charges:"):r_text("%d", {data = {tweak_data.upgrades.doctor_bag_base + managers.player:upgrade_value("doctor_bag", "amount_increase", 0)}})
+	elseif name == "sentry_gun" then
+		self:row():l_text("Ammo:"):r_text("%d", {data = {tweak_data.upgrades.sentry_gun_base_ammo * managers.player:upgrade_value("sentry_gun", "extra_ammo_multiplier", 1)}})
+		self:row():l_text("Rate of Fire:"):r_text("%1f", {data = {60 / tweak_data.weapon.sentry_gun.auto.fire_rate}})
+		self:row():l_text("Damage:"):r_text("%2f", {data = {tweak_data.weapon.sentry_gun.DAMAGE * managers.player:upgrade_value("sentry_gun", "damage_multiplier", 1) * tweak_data.gui.stats_present_multiplier}})
+		self:row():l_text("Spread:"):r_text("%2f", {data = {tweak_data.weapon.sentry_gun.SPREAD * managers.player:upgrade_value("sentry_gun", "spread_multiplier", 1)}})
+		self:row():l_text("Turn Rate Multiplier:"):r_text("%1f", {data = {managers.player:upgrade_value("sentry_gun", "rot_speed_multiplier", 1)}})
+		self:row():l_text("Has Shield:"):r_text("%s", {data = {managers.player:has_category_upgrade("sentry_gun", "shield") and "Yes" or "No"}})
+	elseif name == "ecm_jammer" then
+		self:row():l_text("Duration:"):r_text("%.2fs", {data = {tweak_data.upgrades.ecm_jammer_base_battery_life * managers.player:upgrade_value("ecm_jammer", "duration_multiplier", 1) * managers.player:upgrade_value("ecm_jammer", "duration_multiplier_2", 1)}})
+		self:row():l_text("Interact Time:")
+		self:row({ s = 0.9 }):l_text("\tATMs:"):r_text("%.2fs", {data = {tweak_data.interaction.requires_ecm_jammer_atm.timer}})
+		self:row({ s = 0.9 }):l_text("\tDoors:"):r_text(managers.player:has_category_upgrade("ecm_jammer", "can_open_sec_doors") and "%.2fs" or "N/A", {data = {tweak_data.interaction.requires_ecm_jammer_double.timer}})
+		self:row({ s = 0.9 }):l_text("\tFeedback:"):r_text(managers.player:has_category_upgrade("ecm_jammer", "can_activate_feedback") and "%.2fs" or "N/A", {data = {tweak_data.interaction.ecm_jammer.timer * managers.player:upgrade_value("ecm_jammer", "interaction_speed_multiplier", 1)}})
+		self:row({ h = 15 })
+		local feedback_mul = managers.player:upgrade_value("ecm_jammer", "feedback_duration_boost", 1) * managers.player:upgrade_value("ecm_jammer", "feedback_duration_boost_2", 1)
+		self:row():l_text("Feedback:")
+		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.2fs to %.2fs", {data = {tweak_data.upgrades.ecm_feedback_min_duration * feedback_mul, tweak_data.upgrades.ecm_feedback_max_duration * feedback_mul}})
+		self:row({ s = 0.9 }):l_text("\tRadius:"):r_text("%.2fm", {data = {tweak_data.upgrades.ecm_jammer_base_range / 100}})
+	elseif name == "armor_kit" then
+		
+	elseif name == "first_aid_kit" then
+		--self:row():l_text("Has Damage Reduction:"):r_text("%s", {data = {managers.player:has_category_upgrade("temporary", "first_aid_damage_reduction") and "Yes" or "No"}})
+	elseif name == "bodybags_bag" then
+		self:row():l_text("Charges:"):r_text("%d", {data = {tweak_data.upgrades.bodybag_crate_base}})
+	else
+		io.write("\nInvalid equipment\n")
+	end
 end
