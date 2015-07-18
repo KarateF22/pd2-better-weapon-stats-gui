@@ -3,10 +3,10 @@
 	"description" : "Enhance your game's Inventory Statistics screen and view Hidden Stats for your weapons while fixing how misleading ones are displayed.",
 	"author" : "KarateF22",
 	"contact" : "KarateF22 on Steam",
-	"version" : "4.0",
+	"version" : "4.1",
 	"updates" : [
 		{
-			"revision" : 400,
+			"revision" : 410,
 			"identifier" : "BWS-GUI"
 		}
 	],

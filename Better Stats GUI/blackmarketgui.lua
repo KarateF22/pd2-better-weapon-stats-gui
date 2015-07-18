@@ -991,6 +991,8 @@ function BlackMarketGui:_get_popup_data(equipped)
 			localized_name = managers.localization:text(tweak_data.blackmarket.deployables[name].name_id),
 		}
 	else
+		local raw_name
+		local factory_id = managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)
 		local selected_mod = tweak_data.weapon.factory.parts[self._slot_data.name]
 		local equipped_mod
 		local blueprint = managers.blackmarket:get_weapon_blueprint(self._slot_data.category, self._slot_data.slot)
@@ -998,6 +1000,7 @@ function BlackMarketGui:_get_popup_data(equipped)
 			for _, mod in ipairs(blueprint) do
 				if tweak_data.weapon.factory.parts[mod].type == selected_mod.type then
 					equipped_mod = tweak_data.weapon.factory.parts[mod]
+					raw_name = mod
 					break
 				end
 			end
@@ -1006,10 +1009,11 @@ function BlackMarketGui:_get_popup_data(equipped)
 		if not name then
 			return nil
 		end
+		if not raw_name then raw_name = self._slot_data.name end
 		local localized_name
 		if equipped then
 			if equipped_mod then
-				for _, mod in ipairs(tweak_data.weapon.factory[managers.weapon_factory:get_factory_id_by_weapon_id(managers.blackmarket:equipped_item(category).weapon_id)].default_blueprint) do
+				for _, mod in ipairs(tweak_data.weapon.factory[factory_id].default_blueprint) do
 					if equipped_mod == tweak_data.weapon.factory.parts[mod] then
 						localized_name = "Default Part"
 						break
@@ -1027,6 +1031,11 @@ function BlackMarketGui:_get_popup_data(equipped)
 			stats = equipped and not equipped_mod and {} or name.stats,
 			type = name.type
 		}
+		if tweak_data.weapon.factory[factory_id].override and tweak_data.weapon.factory[factory_id].override[raw_name] then
+			if tweak_data.weapon.factory[factory_id].override[raw_name].stats then
+				data.stats = tweak_data.weapon.factory[factory_id].override[raw_name].stats
+			end
+		end
 	end
 	
 	return data
@@ -1429,6 +1438,9 @@ function InventoryStatsPopup:_primaries_damage()
 		return
 	end
 	
+	local global_difficulty_multiplier = nil
+	if Global.game_settings.difficulty == "overkill_290" then global_difficulty_multiplier = true end
+	
 	local damage_base = self._data.base_stats.damage.value / tweak_data.gui.stats_present_multiplier
 	local damage_mod = self._data.mods_stats.damage.value / tweak_data.gui.stats_present_multiplier
 	local damage_skill = self._data.skill_stats.damage.value / tweak_data.gui.stats_present_multiplier
@@ -1437,6 +1449,7 @@ function InventoryStatsPopup:_primaries_damage()
 	local pierces_shields = self._data.tweak.can_shoot_through_shield or (ammo_data and ammo_data.can_shoot_through_shield)
 	local explosive = ammo_data and (ammo_data.bullet_class == "InstantExplosiveBulletBase" or ammo_data.launcher_grenade == "west_arrow_exp") or self._data.category == "grenade_launcher"
 	local incendiary = ammo_data and (ammo_data.bullet_class == "FlameBulletBase" or ammo_data.launcher_grenade == "launcher_incendiary") or self._data.category == "flamethrower"
+	local poisonous = ammo_data and ammo_data.dot_data and ammo_data.dot_data.type == "poison"
 	local no_hs = explosive or incendiary
 	
 	self:row():l_text("Index Values:")
@@ -1476,6 +1489,15 @@ function InventoryStatsPopup:_primaries_damage()
 		self:row({ h = 15 })
 	end
 	
+	if poisonous then
+		local poison = tweak_data.dot_types.poison
+		self:row():l_text("Poison DOT:")
+		self:row({ s = 0.9 }):l_text("\tCripple Chance:"):r_text("%.0f%%", {data = {poison.hurt_animation_chance * 100}})
+		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {poison.dot_length - .5}})
+		self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.2f", {data = {poison.dot_damage * 2 * tweak_data.gui.stats_present_multiplier}})
+		self:row({ h = 15 })
+	end
+	
 	local difficulties = {
 		{ id = "ok", name = "OK" },
 		{ id = "dw", name = "DW", hp = 1.7, hs = 0.75 },
@@ -1504,7 +1526,7 @@ function InventoryStatsPopup:_primaries_damage()
 				or explosive and (tweak_data.character[data.id].damage.explosion_damage_mul or 1)
 				or data.difficulty_override and data.difficulty_override[diff.id] and data.difficulty_override[diff.id].hs
 				or (tweak_data.character[data.id].headshot_dmg_mul * (diff.hs or 1))
-			local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult
+			local raw_damage = damage_total * (data.is_special and special_mult or 1) * (data.damage_mul or 1) * hs * hs_mult * (global_difficulty_multiplier and 1.7/.75 or 1)
 			local adjusted_damage = math.ceil(math.max(raw_damage / (hp/512), 1)) * (hp/512)
 			row:r_text("%2d (%.2f)", { no_trim = true, data = { math.ceil(hp / adjusted_damage), hp / adjusted_damage }})
 			if i ~= #difficulties then
@@ -1516,8 +1538,8 @@ function InventoryStatsPopup:_primaries_damage()
 	--Dozer special case
 	if not no_hs then
 		for i, diff in ipairs(difficulties) do
-			local hp = tweak_data.character.tank.HEALTH_INIT * (diff.hp or 1)
-			local hs = tweak_data.character.tank.headshot_dmg_mul * (diff.hs or 1)
+			local hp = tweak_data.character.tank.HEALTH_INIT * (diff.hp or 1) * (global_difficulty_multiplier and 1/1.7 or 1)
+			local hs = tweak_data.character.tank.headshot_dmg_mul * (diff.hs or 1) * (global_difficulty_multiplier and 1/.75 or 1)
 			local adjusted_body_damage = math.ceil(math.max(damage_total * special_mult / (hp/512), 1)) * (hp/512)
 			local adjusted_hs_damage = math.ceil(math.max(damage_total * special_mult * hs * hs_mult / (hp/512), 1)) * (hp/512)
 			local adjusted_armor_damage = math.ceil(damage_total * special_mult * 16.384) / 16.384
@@ -1828,6 +1850,14 @@ function InventoryStatsPopup:_grenades()
 		self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {fire.dot_length - .1}})
 		self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.2f", {data = {fire.dot_damage / fire.dot_tick_period * tweak_data.gui.stats_present_multiplier}})
 	end
+	if stats.dot_data then
+		if stats.dot_data.type == "poison" then
+			local dot = tweak_data:get_dot_type_data(stats.dot_data.type)
+			self:row():l_text("Poison DOT:")
+			self:row({ s = 0.9 }):l_text("\tDuration:"):r_text("%.1fs", {data = {dot.dot_length - .5}})
+			self:row({ s = 0.9 }):l_text("\tDPS:"):r_text("%.2f", {data = {dot.dot_damage * 2 * tweak_data.gui.stats_present_multiplier}})
+		end
+	end
 end
 
 function InventoryStatsPopup:_deployables()
@@ -1846,10 +1876,10 @@ function InventoryStatsPopup:_deployables()
 		self:row():l_text("Charges:"):r_text("%d", {data = {tweak_data.upgrades.doctor_bag_base + managers.player:upgrade_value("doctor_bag", "amount_increase", 0)}})
 	elseif name == "sentry_gun" then
 		self:row():l_text("Ammo:"):r_text("%d", {data = {tweak_data.upgrades.sentry_gun_base_ammo * managers.player:upgrade_value("sentry_gun", "extra_ammo_multiplier", 1)}})
-		self:row():l_text("Rate of Fire:"):r_text("%1f", {data = {60 / tweak_data.weapon.sentry_gun.auto.fire_rate}})
-		self:row():l_text("Damage:"):r_text("%2f", {data = {tweak_data.weapon.sentry_gun.DAMAGE * managers.player:upgrade_value("sentry_gun", "damage_multiplier", 1) * tweak_data.gui.stats_present_multiplier}})
-		self:row():l_text("Spread:"):r_text("%2f", {data = {tweak_data.weapon.sentry_gun.SPREAD * managers.player:upgrade_value("sentry_gun", "spread_multiplier", 1)}})
-		self:row():l_text("Turn Rate Multiplier:"):r_text("%1f", {data = {managers.player:upgrade_value("sentry_gun", "rot_speed_multiplier", 1)}})
+		self:row():l_text("Rate of Fire:"):r_text("%.1f", {data = {60 / tweak_data.weapon.sentry_gun.auto.fire_rate}})
+		self:row():l_text("Damage:"):r_text("%.2f", {data = {tweak_data.weapon.sentry_gun.DAMAGE * managers.player:upgrade_value("sentry_gun", "damage_multiplier", 1) * tweak_data.gui.stats_present_multiplier}})
+		self:row():l_text("Spread:"):r_text("%.2f", {data = {tweak_data.weapon.sentry_gun.SPREAD * managers.player:upgrade_value("sentry_gun", "spread_multiplier", 1)}})
+		self:row():l_text("Turn Rate Multiplier:"):r_text("%.1f", {data = {managers.player:upgrade_value("sentry_gun", "rot_speed_multiplier", 1)}})
 		self:row():l_text("Has Shield:"):r_text("%s", {data = {managers.player:has_category_upgrade("sentry_gun", "shield") and "Yes" or "No"}})
 	elseif name == "ecm_jammer" then
 		self:row():l_text("Duration:"):r_text("%.2fs", {data = {tweak_data.upgrades.ecm_jammer_base_battery_life * managers.player:upgrade_value("ecm_jammer", "duration_multiplier", 1) * managers.player:upgrade_value("ecm_jammer", "duration_multiplier_2", 1)}})
